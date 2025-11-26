@@ -233,8 +233,7 @@ while (!folds_ok) {
 }
 
 # Save output
-write.csv(
-  metadata_df_with_folds,
+write.csv(metadata_df_with_folds,
   file.path(data_dir, "metadata_df_with_folds.csv"),
   row.names=F)
 
@@ -259,7 +258,7 @@ print(min_NE_per_fold)
 
 
 
-# 3/4. VST / LASSO 
+# 3. LASSO / VST
 
 ```{r}
 #| warning: false
@@ -295,52 +294,13 @@ host_counts <- read.csv(
 # Filter to samples used for CV
 cv_host_counts <- host_counts[, metadata_df_with_folds$sample_name, drop = FALSE]
 
+# Import parameters
 Parameters <- read.csv(
   file.path(data_dir, "parameters.csv"),
   stringsAsFactors=F, row.names = 1)
 
+# Call number of folds
 nfolds <- as.numeric(Parameters["Folds", "Count"])
-
-
-
-
-
-
-#--------------------------------3b. VST Transform-----------------------------#
-
-
-
-
-
-
-# Keep genes: >10 counts in >20% samples
-keep <- rowSums(cv_host_counts > 10) > 0.2 * ncol(cv_host_counts)
-cv_host_counts <- cv_host_counts[keep, ]
-
-# DESeq2 VST
-dds <- DESeq2::DESeqDataSetFromMatrix(
-  countData = cv_host_counts,
-  colData = metadata_df_with_folds,
-  design = ~1
-)
-
-vsd <- DESeq2::varianceStabilizingTransformation(dds)
-vsd_mat <- SummarizedExperiment::assay(vsd) %>% round(2)
-
-# Save VST output
-write.csv(
-  vsd_mat,
-  file.path(data_dir, "cv_vst.csv"),
-  row.names=T)
-
-
-
-
-
-
-#---------------------------4a. Ready data for LASSO---------------------------#
-
-
 
 
 
@@ -353,9 +313,6 @@ ensg2gene <- read.csv(
 ) %>%
   { `names<-`(.$gene_symbol, .$X) }
 
-# Prepare X and y
-X <- t(as.matrix(vsd_mat))    # samples x genes
-y <- metadata_df_with_folds$LRTI_adjudication == "Definite"
 
 
 
@@ -364,7 +321,7 @@ y <- metadata_df_with_folds$LRTI_adjudication == "Definite"
 
 
 
-#----------------------------4b. LASSO Workflow--------------------------------#
+#----------------------------3b. LASSO function--------------------------------#
 
 
 
@@ -373,15 +330,57 @@ y <- metadata_df_with_folds$LRTI_adjudication == "Definite"
 
 
 lasso_cv_outer_fold <- function(test_fold) {
+  
+  
+  
+#-------------------------3b.1 VST training samples ONLY-----------------------#
+  
+  
+  
 
-  train <- metadata_df_with_folds$fold != test_fold
+# Identify train/test samples
+train_idx <- metadata_df_with_folds$fold != test_fold
+
+# Extract training counts
+train_counts <- cv_host_counts[, train_idx, drop = FALSE]
+
+# Build DESeq2 object for training samples only
+dds_train <- DESeq2::DESeqDataSetFromMatrix(
+  countData = train_counts,
+  colData = metadata_df_with_folds[train_idx, , drop = FALSE],
+  design = ~1)
+
+# Calculate size factors
+dds_train <- DESeq2::estimateSizeFactors(dds_train)
+
+# Apply VST to training samples only
+vsd_train <- DESeq2::varianceStabilizingTransformation(dds_train)
+
+# Extract VST matrix
+vsd_train_mat <- SummarizedExperiment::assay(vsd_train) %>% round(2)
+
+# Create training X and y
+X_train <- t(as.matrix(vsd_train_mat))            # training samples x genes
+y_train <- (metadata_df_with_folds$LRTI_adjudication[train_idx] == "Definite")
+
+  
+  
+
+
+
+
+#----------------3b.2 Find lambda that yields 3 genes per fold-----------------#
+
+
+
+
+
 
   # Fit full lambda path
   fit <- glmnet::glmnet(
-    X[train, ], y[train],
+    X_train, y_train,
     family = "binomial",
-    standardize = TRUE
-  )
+    standardize = TRUE)
 
   # Count nonzero genes at each lambda
   nz <- apply(fit$beta, 2, function(b) sum(b != 0))
@@ -390,15 +389,52 @@ lasso_cv_outer_fold <- function(test_fold) {
   if (any(nz == 3)) {
     lambda_k3 <- fit$lambda[which(nz == 3)[1]]   # largest lambda w/ 3 nonzero
   } else {
-    # fallback: closest to 3, then later trim
     idx <- which.min(abs(nz - 3))
     lambda_k3 <- fit$lambda[idx]
   }
 
-  # Predict
-  preds <- predict(fit, X[!train, ], type = "response", s = lambda_k3)[, 1] %>%
-    data.frame(pred = .) %>%
-    tibble::rownames_to_column("sample_name")
+  
+  
+  
+  
+  
+#---------------------3b.3 Build VST on TEST samples ONLY----------------------#
+  
+  
+  
+# Identify test samples  
+test_idx <- metadata_df_with_folds$fold == test_fold
+
+# Extract test counts
+test_counts <- cv_host_counts[, test_idx, drop = FALSE]
+
+# Build DESeq2 object for test samples only
+dds_test <- DESeq2::DESeqDataSetFromMatrix(
+  countData = test_counts,
+  colData = metadata_df_with_folds[test_idx, , drop = FALSE],
+  design = ~1)
+
+# Calculate size factors
+dds_test <- DESeq2::estimateSizeFactors(dds_test)
+
+# Apply VST to test samples only
+vsd_test <- DESeq2::varianceStabilizingTransformation(dds_test)
+
+# Extract VST matrix
+vsd_test_mat <- SummarizedExperiment::assay(vsd_test) %>% round(2)
+
+# Build X_test
+X_test <- t(as.matrix(vsd_test_mat))
+
+# Predictions for TEST FOLD ONLY
+pred_vec <- predict(fit, newx = X_test, type = "response", s = lambda_k3)[, 1]
+
+# Build prediction dataframe
+preds <- data.frame(
+  sample_name = colnames(test_counts),
+  pred = pred_vec,
+  stringsAsFactors=F)
+
 
   # Coefficients at selected lambda
   coefs_vec <- coef(fit, s = lambda_k3)[-1, 1]
@@ -407,25 +443,32 @@ lasso_cv_outer_fold <- function(test_fold) {
   
   
   
-  # Ensure at least 3 genes
-if (length(nonzero) < 3) {
-  # take the strongest remaining coefficients
-  coefs_all <- coef(fit, s = lambda_k3)[-1, 1]
-  abs_all <- sort(abs(coefs_all), decreasing = TRUE)
-  needed <- 3 - length(nonzero)
-  add_genes <- names(abs_all)[!names(abs_all) %in% names(nonzero)][1:needed]
-  nonzero <- c(nonzero, coefs_all[add_genes])
-}
-
-
   
+  
+  
+  #-------------------3b.4 Ensure structure and build data frame---------------#
+  
+  
+  
+  
+  
+  
+  # Ensure at least 3 genes
+  if (length(nonzero) < 3) {
+  # take the strongest remaining coefficients
+    coefs_all <- coef(fit, s = lambda_k3)[-1, 1]
+    abs_all <- sort(abs(coefs_all), decreasing = TRUE)
+    needed <- 3 - length(nonzero)
+    add_genes <- names(abs_all)[!names(abs_all) %in% names(nonzero)][1:needed]
+    nonzero <- c(nonzero, coefs_all[add_genes])
+  }
+
 
   # If >3, keep top 3 by abs value
   if (length(nonzero) > 3) {
     top3 <- sort(abs(nonzero), decreasing = TRUE)[1:3]
     nonzero <- nonzero[names(top3)]
   }
-  
   
   
   
@@ -438,25 +481,52 @@ if (length(nonzero) < 3) {
     fold = test_fold, 
     stringsAsFactors=F
   )
+  
+  # Combine samples
+  vsd_combined <- cbind(vsd_train_mat, vsd_test_mat)
 
-  list(pred = preds, mod = fit, coef = nonzero_df)
+  list(
+    pred = preds,
+    mod = fit, 
+    coef = nonzero_df,
+    vsd_cols = vsd_combined)
 }
 
 
 
 
 
-#------------------------4c. Run LASSO across folds----------------------------#
+#------------------------3c. Run LASSO across folds----------------------------#
 
 
 
 
 
 
-
+# Apply to all folds
 lasso_results <- lapply(
   1:max(metadata_df_with_folds$fold),
   lasso_cv_outer_fold)
+
+# Collect the per-fold vsd pieces into a list
+vsd_list <- lapply(lasso_results, `[[`, "vsd_cols")
+
+# Combine them column-wise (each element is genes x samples for that fold)
+full_vsd <- do.call(cbind, vsd_list)
+
+# Re-order columns to the canonical sample order (metadata_df_with_folds$sample_name)
+# This ensures columns are in the same order as your metadata
+full_vsd <- full_vsd[, metadata_df_with_folds$sample_name, drop = FALSE]
+
+# sanity check: same column names and no duplicated samples
+stopifnot(!any(duplicated(colnames(full_vsd))))
+stopifnot(all(colnames(full_vsd) == metadata_df_with_folds$sample_name))
+
+# Save the matrix so RF can load it later if you want
+write.csv(full_vsd,
+          file.path(data_dir, "vst_combined_per_fold.csv"),
+          row.names=T)
+
 
 
 
@@ -471,7 +541,7 @@ lasso_fold_coefs <- lasso_results %>%
 
 
 
-
+# Save outputs
 write.csv(
   lasso_preds,
   file.path(results_dir, "lasso_preds.csv"),
@@ -486,16 +556,16 @@ write.csv(
 
 
 
-#---------------------------4d. Safety Check-----------------------------------#
+#---------------------------3d. Safety Check-----------------------------------#
 
 
 
-
+# Summary
 print(table(lasso_fold_coefs$gene))
 
 nrow(lasso_fold_coefs) == 15 # Should return TRUE
 
-all(rownames(X) == metadata_df_with_folds$sample_name) # Should return TRUE
+
 
 
 
@@ -515,8 +585,7 @@ all(rownames(X) == metadata_df_with_folds$sample_name) # Should return TRUE
 
 
 
-
-# 5. Random Forest
+# 4. Random Forest
 
 ```{r}
 #| warning: false
@@ -524,7 +593,7 @@ all(rownames(X) == metadata_df_with_folds$sample_name) # Should return TRUE
 
 
 
-#---------------------------5a. Ready Data for RF Workflow---------------------#
+#---------------------------4a. Ready Data for RF Workflow---------------------#
 
 
 
@@ -535,6 +604,10 @@ library(dplyr)
 library(magrittr)
 library(randomForest)
 library(tibble)
+library(DESeq2)    
+library(SummarizedExperiment)
+
+
 
 set.seed(8634782)
 
@@ -543,69 +616,36 @@ metadata_df_with_folds <- read.csv(
   file.path(data_dir, "metadata_df_with_folds.csv"),
   stringsAsFactors=F)
 
-vsd_mat <- read.csv(
-  file.path(data_dir, "cv_vst.csv"),
-  row.names = 1,
-  check.names = FALSE)
+full_vsd <- read.csv(
+  file.path(data_dir, "vst_combined_per_fold.csv"),
+  stringsAsFactors=F, row.names=1)
 
 Parameters <- read.csv(
   file.path(data_dir, "parameters.csv"),
   stringsAsFactors=F, row.names=1)
+
 
 # Define ntrees 
 ntrees <- as.numeric(Parameters["RF Trees", "Count"])
 
 
 
-
-# Use transposed version
-vsd_mat_t <- t(as.matrix(vsd_mat))
-
 # Convert patient_id to character
-metadata_df_with_folds$sample_name <- as.character(metadata_df_with_folds$sample_name)
+#metadata_df_with_folds$sample_name <- as.character(metadata_df_with_folds$sample_name)
 
 # Import selected proteins
 lasso_fold_coefs <- read.csv(
   file.path(results_dir, "lasso_fold_coefs.csv"), 
   stringsAsFactors=F)
 
-#lasso_fold_coefs_top1_per_fold <- read.csv(
-  #file.path(results_dir, "lasso_fold_coefs_top1_per_fold.csv"),
-  #stringsAsFactors=F)
-
-#lasso_fold_coefs_top3_per_fold <- read.csv(
-  #file.path(results_dir, "lasso_fold_coefs_top3_per_fold.csv"),
-  #stringsAsFactors=F)
-
-
-
-
-
-#-------------------------5b. Choose proteins to run---------------------------#
-
-
-
-
-
-# Choose which LASSO feature set to use for RF (uncomment ONE line)
-
-# Option 1: All nonzero proteins across folds
+# Use lasso_fold_coefs as selected genes
 selected_lasso_coefs <- lasso_fold_coefs
 
-# Option 2: Top 3 proteins across all folds (Also uncomment the line with ➡️ below)
-#selected_lasso_coefs <- lasso_fold_coefs_top3
-
-# Option 3: Top 1 protein per fold
-#selected_lasso_coefs <- lasso_fold_coefs_top1_per_fold
-
-# Option 4: Top 3 proteins per fold
-#selected_lasso_coefs <- lasso_fold_coefs_top3_per_fold
 
 
 
 
-
-#-------------------------5c. RF Workflow--------------------------------------#
+#-----------------------------4b. RF function----------------------------------#
 
 
 
@@ -617,24 +657,43 @@ y <- as.factor(metadata_df_with_folds$LRTI_adjudication)
 # Function to run Random Forest for one outer CV fold
 lassoRF_cv_outer_fold <- function(test_fold) {
   
+  
   # Extract proteins selected by LASSO for this fold
   keep <- selected_lasso_coefs %>%
             filter(fold == test_fold) %>%
             .$gene
-  
-  #keep <- lasso_fold_coefs_top3$gene #➡️(uncomment to run global top3)
 
-  # Subset protein matrix to selected proteins; rows = samples, columns = selected proteins
-  X <- vsd_mat_t[, keep, drop = FALSE]  
-  
   # Boolean for training samples
   train <- metadata_df_with_folds$fold != test_fold
+  test  <- metadata_df_with_folds$fold == test_fold
+
   
+  
+  
+#--------------------4b.1 Use precomputed vst from LASSO-----------------------#
+  
+  
+
+# full_vsd is genes x samples — transpose to samples x genes
+X_all <- t(as.matrix(full_vsd))
+
+# Ensure X_all row order matches metadata order
+X_all <- X_all[metadata_df_with_folds$sample_name, , drop = FALSE]
+
+
+# training / test matrices
+X_train <- X_all[train, keep, drop = FALSE]
+X_test  <- X_all[test, keep, drop = FALSE]
+
+
+
+
+
   # Fit Random Forest (10000 Trees)
-  rf <- randomForest(X[train, , drop = FALSE], y[train], ntree = ntrees)
+  rf <- randomForest(X_train, y[train], ntree = ntrees)
   
   # Predictions on test fold
-  preds <- predict(rf, newdata = X[!train, , drop = FALSE], type = "prob")[, "Definite"]
+  preds <- predict(rf, newdata = X_test, type = "prob")[, "Definite"]
   
   list(test_fold = test_fold, mod = rf, pred = preds)
 }
@@ -643,13 +702,14 @@ lassoRF_cv_outer_fold <- function(test_fold) {
 cv_list <- lapply(1:max(metadata_df_with_folds$fold), lassoRF_cv_outer_fold)
 
 # Ensure correct format
-metadata_df_with_folds <- as.data.frame(metadata_df_with_folds)
+#metadata_df_with_folds <- as.data.frame(metadata_df_with_folds)
 
 
 
 
 
-#--------------------------5d. Collect preds-----------------------------------#
+
+#--------------------------4c. Collect preds-----------------------------------#
 
 
 
@@ -659,7 +719,7 @@ metadata_df_with_folds <- as.data.frame(metadata_df_with_folds)
 rf_preds <- cv_list %>%
   lapply(function(x) {
     data.frame(
-      sample_name = rownames(vsd_mat_t)[metadata_df_with_folds$fold == x$test_fold],
+      sample_name = metadata_df_with_folds$sample_name[metadata_df_with_folds$fold == x$test_fold],
       pred = x$pred
     )
   }) %>%
@@ -681,12 +741,8 @@ write.csv(rf_preds,
 
 
 
+#------------------------4d. Collect votes-------------------------------------#
 
-
-
-
-
-#------------------------5e. Collect votes-------------------------------------#
 
 
 
@@ -698,7 +754,7 @@ rf_votes <- cv_list %>%
     as.data.frame(x$mod$votes) %>%
       tibble::rownames_to_column("sample_name") %>%
       mutate(test_fold = x$test_fold) %>%
-      rename(pred = Definite) %>%
+      mutate(pred = .data[["Definite"]]) %>%
       dplyr::select(test_fold, sample_name, pred)
   }) %>%
   bind_rows() %>%
@@ -717,7 +773,7 @@ write.csv(rf_votes,
 
 
 
-#------------------------------6f. Safety Check--------------------------------#
+#------------------------------4e. Safety Check--------------------------------#
 
 
 
@@ -726,10 +782,10 @@ write.csv(rf_votes,
 table(selected_lasso_coefs$gene)
 
 
-all(selected_lasso_coefs$gene %in% colnames(vsd_mat_t)) # Should return TRUE
-
-
 nrow(rf_preds) == nrow(metadata_df_with_folds) # Should return TRUE
+
+
+
 
 
 
@@ -747,7 +803,8 @@ nrow(rf_preds) == nrow(metadata_df_with_folds) # Should return TRUE
 
 
 
-# 6. Generate ROC Graph
+
+# 5. Generate ROC Graph
 
 ```{r}
 #| warning: false
@@ -757,7 +814,7 @@ nrow(rf_preds) == nrow(metadata_df_with_folds) # Should return TRUE
 
 
 
-#----------------------------6a. Import metadata & preds-----------------------#
+#----------------------------5a. Import metadata & preds-----------------------#
 
 
 
@@ -795,7 +852,7 @@ merged_preds <- lassoRF_preds %>%
 
 
 
-#------------------------6b. Per-fold AUC + ROC plotting-----------------------#
+#------------------------5b. Per-fold AUC + ROC plotting-----------------------#
 
 
 
@@ -856,7 +913,7 @@ output_auc_roc <- function(preds_df, output_suffix) {
 
 
 
-#------------------------------6c. Plot Graph (in QMD)-------------------------#
+#---------------------------5c. Plot Graph (in QMD)----------------------------#
 
 
 
@@ -898,7 +955,7 @@ legend("bottomright", legend = paste("Fold", 1:max_fold), col = 1:max_fold, lwd 
 
 
 
-#------------------------------6d. Summaries----------------------------------#
+#-------------------------------6d. Summaries----------------------------------#
 
 
 
@@ -922,7 +979,8 @@ legend("bottomright", legend = paste("Fold", 1:max_fold), col = 1:max_fold, lwd 
 # DeLong 95% CI for overall ROC
 ci_auc <- pROC::ci.auc(
   pROC::roc(
-    response = factor(merged_preds$LRTI_adjudication, levels = c("No Evidence", "Definite")),
+    response = factor(merged_preds$LRTI_adjudication, 
+    levels = c("No Evidence", "Definite")),
     predictor = merged_preds$pred,
     direction = "<"
   ),
@@ -952,12 +1010,8 @@ print(auc_lassoRF)
 
 ### AUC Values 
 
-lasso_fold_coefs: 0.9301
+lasso_fold_coefs: 0.899
 
-lasso_fold_coefs_top3: 0.9428
 
-lasso_fold_coefs_top1_per_fold: 0.6705
-
-lasso_fold_coefs_top3_per_fold: 0.8359
 
 
