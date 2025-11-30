@@ -309,8 +309,7 @@ nfolds <- as.numeric(Parameters["Folds", "Count"])
 # Map ENSG → SYMBOL vector
 ensg2gene <- read.csv(
   file.path(data_dir, "host_gene_counts.csv"),
-  stringsAsFactors=F
-) %>%
+  stringsAsFactors=F) %>%
   { `names<-`(.$gene_symbol, .$X) }
 
 
@@ -579,12 +578,6 @@ nrow(lasso_fold_coefs) == 15 # Should return TRUE
 
 
 
-
-
-
-
-
-
 # 4. Random Forest
 
 ```{r}
@@ -797,13 +790,6 @@ nrow(rf_preds) == nrow(metadata_df_with_folds) # Should return TRUE
 
 
 
-
-
-
-
-
-
-
 # 5. Generate ROC Graph
 
 ```{r}
@@ -1002,15 +988,176 @@ print(auc_lassoRF)
 
 
 
+#6. DE Analysis 
+
+```{r}
+#| warning: false
 
 
 
 
-## ROC results
+#---------------------------------6a. Import data------------------------------#
 
-### AUC Values 
 
-lasso_fold_coefs: 0.899
+
+
+library(DESeq2)
+library(ggplot2)
+library(ggrepel)   
+library(dplyr)
+library(apeglm)
+
+
+
+# Metadata with folds
+metadata_df_with_folds <- read.csv(
+  file.path(data_dir, "metadata_df_with_folds.csv"),
+  stringsAsFactors=F)
+
+# Host counts (remove gene_symbol col, rownames = ENSG)
+host_counts <- read.csv(
+  file.path(data_dir, "host_gene_counts.csv"),
+  stringsAsFactors=F, row.names = 1)[, -1]
+
+# Filter to Defiite / No Evidence patients
+cv_host_counts <- host_counts[, metadata_df_with_folds$sample_name, drop = FALSE]
+
+
+# Map ENSG → SYMBOL vector
+ensg2gene <- read.csv(
+  file.path(data_dir, "host_gene_counts.csv"),
+  stringsAsFactors=F) %>%
+  { `names<-`(.$gene_symbol, .$X) }
+
+
+
+
+
+
+#---------------------------------6b. DESeq2-----------------------------------#
+
+
+
+
+
+
+
+# Build DESeq dataset 
+dds <- DESeqDataSetFromMatrix(
+  countData = cv_host_counts,
+  colData   = metadata_df_with_folds %>% column_to_rownames("sample_name"),
+  design    = ~ LRTI_adjudication)
+
+# Filter low count genes
+keep <- rowSums(counts(dds) > 10) > 0.2 * ncol(counts(dds))
+dds <- dds[keep, ]
+
+# Run DESeq 
+dds <- DESeq(dds)
+
+# Get results (Definite vs No Evidence)
+res <- results(dds, contrast = c("LRTI_adjudication", "Definite", "No Evidence"))
+
+resultsNames(dds)
+
+
+resLFC <- lfcShrink(dds, coef="LRTI_adjudication_No.Evidence_vs_Definite", type="apeglm")
+
+res_df <- as.data.frame(resLFC) %>%
+  rownames_to_column("gene") %>%
+  mutate(
+    padj = ifelse(is.na(padj), 1, padj),
+    log2FoldChange = ifelse(is.na(log2FoldChange), 0, log2FoldChange),
+    negLog10P = -log10(pvalue + 1e-300) )
+
+
+
+
+
+
+
+#--------------------------------6c. Volcano Plot------------------------------#
+
+
+
+
+
+
+
+# Flip LFC so positive = Definite (even though coef was reversed)
+res_df$log2FoldChange <- -res_df$log2FoldChange
+
+
+
+
+#------------------------------6c.1 Plot content-------------------------------#
+
+
+
+
+# Add gene symbols
+res_df$gene_symbol <- ensg2gene[res_df$gene]
+res_df$gene_symbol[is.na(res_df$gene_symbol)] <- res_df$gene
+
+
+# Compute significance
+res_df <- res_df %>%
+  mutate(sig = padj < 0.05 & abs(log2FoldChange) >= 1)
+
+# 4) Define biological direction (for point color)
+res_df <- res_df %>%
+  mutate(direction = case_when(
+    log2FoldChange > 1 ~ "Definite",
+    log2FoldChange < -1 ~ "NoEvidence",
+    abs(log2FoldChange) <= 1 ~ "Neutral"
+  ))
+
+# 5) Top 10 in each direction
+top_definite  <- res_df %>% filter(direction=="Definite")  %>% arrange(padj) %>% head(10)
+top_noEvidence <- res_df %>% filter(direction=="NoEvidence") %>% arrange(padj) %>% head(10)
+
+top_labels <- bind_rows(top_definite, top_noEvidence)
+
+
+
+
+#-------------------------------6c.2 ggplot------------------------------------#
+
+
+
+
+ggplot(res_df, aes(x = log2FoldChange, y = negLog10P)) +
+  geom_point(aes(color = direction), alpha = 0.6) +
+  scale_color_manual(values = c(
+    "Definite" = "blue",
+    "NoEvidence" = "red",
+    "Neutral" = "grey70"
+  )) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  theme_minimal() +
+  labs(x = "log2 Fold Change",
+       y = "-log10(p-value)",
+       title = "Volcano plot - host counts") +
+  geom_text_repel(
+    data = top_labels,
+    aes(label = gene_symbol),
+    size = 3,
+    max.overlaps = 30)
+
+# Save results
+write.csv(res_df,
+          file.path(results_dir, "DESeq2_results_transcriptome.csv"),
+          row.names=F)
+
+ggsave(file.path(results_dir, "volcano_transcriptome.png"), 
+       width = 8, height = 6)
+
+
+```
+
+
+
 
 
 
