@@ -260,6 +260,9 @@ print(min_NE_per_fold)
 
 # 3. LASSO / VST
 
+
+
+
 ```{r}
 #| warning: false
 
@@ -332,6 +335,8 @@ lasso_cv_outer_fold <- function(test_fold) {
   
   
   
+  
+  
 #-------------------------3b.1 VST training samples ONLY-----------------------#
   
   
@@ -352,8 +357,12 @@ dds_train <- DESeq2::DESeqDataSetFromMatrix(
 # Calculate size factors
 dds_train <- DESeq2::estimateSizeFactors(dds_train)
 
+dds_train <- DESeq2::estimateDispersions(dds_train)
+
 # Apply VST to training samples only
-vsd_train <- DESeq2::varianceStabilizingTransformation(dds_train)
+vsd_train <- DESeq2::varianceStabilizingTransformation(dds_train, 
+                                                       blind=F, 
+                                                       fitType="parametric")
 
 # Extract VST matrix
 vsd_train_mat <- SummarizedExperiment::assay(vsd_train) %>% round(2)
@@ -407,20 +416,30 @@ test_idx <- metadata_df_with_folds$fold == test_fold
 # Extract test counts
 test_counts <- cv_host_counts[, test_idx, drop = FALSE]
 
-# Build DESeq2 object for test samples only
+
+
+
+
 dds_test <- DESeq2::DESeqDataSetFromMatrix(
-  countData = test_counts,
-  colData = metadata_df_with_folds[test_idx, , drop = FALSE],
-  design = ~1)
+  countData = test_counts[rownames(dds_train), , drop=FALSE],  # ensure same genes as train
+  colData = metadata_df_with_folds[test_idx, , drop=FALSE],
+  design = ~1
+)
 
-# Calculate size factors
-dds_test <- DESeq2::estimateSizeFactors(dds_test)
+dds_test <- estimateSizeFactors(dds_test)
 
-# Apply VST to test samples only
-vsd_test <- DESeq2::varianceStabilizingTransformation(dds_test)
+dispersionFunction(dds_test) <- dispersionFunction(dds_train)
+
+# Apply frozen VST
+vsd_test <- DESeq2::varianceStabilizingTransformation(dds_test, blind=F,
+                                                      fitType="parametric")
 
 # Extract VST matrix
 vsd_test_mat <- SummarizedExperiment::assay(vsd_test) %>% round(2)
+
+
+
+
 
 # Build X_test
 X_test <- t(as.matrix(vsd_test_mat))
@@ -445,7 +464,7 @@ preds <- data.frame(
   
   
   
-  #-------------------3b.4 Ensure structure and build data frame---------------#
+#-------------------3b.4 Ensure structure and build data frame-----------------#
   
   
   
@@ -507,21 +526,17 @@ lasso_results <- lapply(
   1:max(metadata_df_with_folds$fold),
   lasso_cv_outer_fold)
 
-# Collect the per-fold vsd pieces into a list
+
 vsd_list <- lapply(lasso_results, `[[`, "vsd_cols")
-
-# Combine them column-wise (each element is genes x samples for that fold)
 full_vsd <- do.call(cbind, vsd_list)
-
-# Re-order columns to the canonical sample order (metadata_df_with_folds$sample_name)
-# This ensures columns are in the same order as your metadata
+# Ensures columns are in the same order as metadata
 full_vsd <- full_vsd[, metadata_df_with_folds$sample_name, drop = FALSE]
 
-# sanity check: same column names and no duplicated samples
+
 stopifnot(!any(duplicated(colnames(full_vsd))))
 stopifnot(all(colnames(full_vsd) == metadata_df_with_folds$sample_name))
 
-# Save the matrix so RF can load it later if you want
+# Save the matrix
 write.csv(full_vsd,
           file.path(data_dir, "vst_combined_per_fold.csv"),
           row.names=T)
@@ -566,13 +581,7 @@ nrow(lasso_fold_coefs) == 15 # Should return TRUE
 
 
 
-
-
 ```
-
-
-
-
 
 
 
