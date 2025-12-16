@@ -281,6 +281,8 @@ library(magrittr)
 library(DESeq2)
 library(glmnet)
 library(tibble)
+library(ggplot2)
+library(knitr)
 
 set.seed(8634782)
 
@@ -392,19 +394,32 @@ y_train <- (metadata_df_with_folds$LRTI_adjudication[train_idx] == "Definite")
 
   # Count nonzero genes at each lambda
   nz <- apply(fit$beta, 2, function(b) sum(b != 0))
+  
+  
+
+
+
+
+
+
+
+# Comment below for CV lasso
 
   # Lambda that selects exactly 3 genes
-  if (any(nz == 3)) {
-    lambda_k3 <- fit$lambda[which(nz == 3)[1]]   # largest lambda w/ 3 nonzero
+  if (any(nz == 1)) {
+    lambda_k1 <- fit$lambda[which(nz == 1)[1]]   # largest lambda w/ 3 nonzero
   } else {
-    idx <- which.min(abs(nz - 3))
-    lambda_k3 <- fit$lambda[idx]
+    idx <- which.min(abs(nz - 1))
+    lambda_k1 <- fit$lambda[idx]
   }
 
+# Comment above for CV lasso  
   
   
   
-  
+
+
+
   
 #---------------------3b.3 Build VST on TEST samples ONLY----------------------#
   
@@ -438,14 +453,44 @@ vsd_test <- DESeq2::varianceStabilizingTransformation(dds_test, blind=F,
 vsd_test_mat <- SummarizedExperiment::assay(vsd_test) %>% round(2)
 
 
-
-
-
 # Build X_test
 X_test <- t(as.matrix(vsd_test_mat))
 
-# Predictions for TEST FOLD ONLY
-pred_vec <- predict(fit, newx = X_test, type = "response", s = lambda_k3)[, 1]
+
+
+
+
+
+
+
+# Run below for CV lasso
+
+# Cross-validated LASSO on training data
+#cv_fit <- cv.glmnet(
+  #X_train, y_train,
+  #family = "binomial",
+  #standardize = TRUE,
+  # = nfolds
+#)
+
+# Extract coefficients at lambda.1se
+#coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]
+
+# Keep only nonzero coefficients
+#nonzero <- coefs_vec[coefs_vec != 0]
+
+# Run above for CV lasso
+
+
+
+
+
+
+
+
+# Predictions for TEST FOLD ONLY (change lambda_k3 or cv_fit$lambda.1se)
+pred_vec <- predict(fit, newx = X_test, type = "response", s = lambda_k1)[, 1]
+
 
 # Build prediction dataframe
 preds <- data.frame(
@@ -454,8 +499,8 @@ preds <- data.frame(
   stringsAsFactors=F)
 
 
-  # Coefficients at selected lambda
-  coefs_vec <- coef(fit, s = lambda_k3)[-1, 1]
+  # Coefficients at selected lambda (change lambda_k3 or cv_fit$lambda.1se)
+  coefs_vec <- coef(fit, s = lambda_k1)[-1, 1]
 
   nonzero <- coefs_vec[coefs_vec != 0]
   
@@ -469,24 +514,33 @@ preds <- data.frame(
   
   
   
+# Comment below for CV lasso  
   
+  # Ensure at least 3 genes per fold (like protein workflow)
+if (length(nonzero) < 1) {
+  # Find all lambdas that select >= 3 nonzero genes
+  lambda_idx_candidates <- which(nz >= 1)
+  if (length(lambda_idx_candidates) == 0) {
+    # If no lambda has >=3, pick lambda with closest >3 
+    idx <- which.min(abs(nz - 1))
+    lambda_k1 <- fit$lambda[idx]
+  } else {
+    # Pick the largest lambda that yields at least 3 nonzeros
+    lambda_k1 <- fit$lambda[lambda_idx_candidates[1]]
+  }
+  # Extract coefficients at the new lambda
+  coefs_vec <- coef(fit, s = lambda_k1)[-1, 1]
+  nonzero <- coefs_vec[coefs_vec != 0]
+  # If still >3, keep top 3 by absolute value
+  if (length(nonzero) > 1) {
+    top1 <- sort(abs(nonzero), decreasing = TRUE)[1]
+    nonzero <- nonzero[names(top1)]
+  }
+}
+
   
-  # Ensure at least 3 genes
-  if (length(nonzero) < 3) {
-  # take the strongest remaining coefficients
-    coefs_all <- coef(fit, s = lambda_k3)[-1, 1]
-    abs_all <- sort(abs(coefs_all), decreasing = TRUE)
-    needed <- 3 - length(nonzero)
-    add_genes <- names(abs_all)[!names(abs_all) %in% names(nonzero)][1:needed]
-    nonzero <- c(nonzero, coefs_all[add_genes])
-  }
-
-
-  # If >3, keep top 3 by abs value
-  if (length(nonzero) > 3) {
-    top3 <- sort(abs(nonzero), decreasing = TRUE)[1:3]
-    nonzero <- nonzero[names(top3)]
-  }
+# Comment above for CV lasso  
+  
   
   
   
@@ -509,6 +563,8 @@ preds <- data.frame(
     coef = nonzero_df,
     vsd_cols = vsd_combined)
 }
+
+
 
 
 
@@ -575,9 +631,89 @@ write.csv(
 
 
 # Summary
-print(table(lasso_fold_coefs$gene))
+print(table(lasso_fold_coefs$gene_symbol))
 
-nrow(lasso_fold_coefs) == 15 # Should return TRUE
+nrow(lasso_fold_coefs) 
+
+
+
+
+
+
+#-------------------------------3e. Bar Graph----------------------------------#
+```
+
+
+
+```{r}
+
+gene_freq <- table(lasso_fold_coefs$gene_symbol)
+
+gene_df <- as.data.frame(gene_freq)
+
+colnames(gene_df) = c("gene_symbol", "fold_freq")
+
+  
+
+
+
+library(ggplot2)
+library(dplyr)
+
+ggplot(
+  gene_df %>% filter(gene_freq > 1),
+  aes(
+    x = reorder(gene_symbol, fold_freq),
+    y = fold_freq
+  )
+) +
+  geom_col(fill = "steelblue", width = 0.7) +
+  scale_y_continuous(breaks = 1:5) +
+  labs(
+    title = "Genes Selected Across >1 Fold",
+    x = NULL,
+    y = "Number of folds selected"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+
+top10coefs <- lasso_fold_coefs %>% 
+    slice_max(order_by = abs(lasso_fold_coefs$coef), n=10)
+
+ggplot(
+  top10coefs,
+  aes(
+    x = coef,
+    y = interaction(gene_symbol, fold, sep = " | ")
+  )
+) +
+  geom_col(fill = "#d95f02", width = 0.7) +
+  
+  #geom_text(
+    #aes(label = paste0("Fold ", fold)),
+    #position = position_stack(vjust = 0.5),
+    #color = "white",
+    #size = 4) +
+  
+  geom_text(
+  aes(label = round(coef, 3)),
+  hjust = ifelse(top10coefs$coef > 0, -0.1, 1.1),
+  size = 4
+) +
+  
+  scale_x_continuous(
+    limits = c(-1.5, 1.5),
+    breaks = seq(-1.5, 1.5, by = 0.5)
+  ) +
+  scale_y_discrete(limits = sort) +
+  labs(
+    title = "Top 10 Genes by |coef|",
+    x = "Coefficient",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 14)
+
 
 
 
@@ -664,6 +800,8 @@ lassoRF_cv_outer_fold <- function(test_fold) {
   keep <- selected_lasso_coefs %>%
             filter(fold == test_fold) %>%
             .$gene
+  
+ 
 
   # Boolean for training samples
   train <- metadata_df_with_folds$fold != test_fold
@@ -683,11 +821,12 @@ X_all <- t(as.matrix(full_vsd))
 X_all <- X_all[metadata_df_with_folds$sample_name, , drop = FALSE]
 
 
+
 # training / test matrices
 X_train <- X_all[train, keep, drop = FALSE]
 X_test  <- X_all[test, keep, drop = FALSE]
 
-
+stopifnot(all(colnames(X_train) %in% selected_lasso_coefs$gene))
 
 
 
@@ -781,10 +920,13 @@ write.csv(rf_votes,
 
 
 # Summary
-table(selected_lasso_coefs$gene)
+table(selected_lasso_coefs$gene_symbol)
 
 
 nrow(rf_preds) == nrow(metadata_df_with_folds) # Should return TRUE
+
+
+
 
 
 
