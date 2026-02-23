@@ -1,0 +1,206 @@
+---
+title: "07-rna_protein_conc_plot"
+output: html_notebook
+toc: true
+---
+
+```{r}
+#| warning: false
+
+
+
+
+
+
+# 7.1. Import data
+
+
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(openxlsx)
+
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+
+# Import data
+rna_res <- read.csv(
+  file.path(results_dir, "DE_limma_results_transcriptome.csv"),
+  stringsAsFactors=F)
+
+prot_res <- read.csv(
+  file.path("C:/Users/User/Documents/UCSF/BREATH2.Prot/results/DA_results_proteomics.csv"),
+  stringsAsFactors=F)
+
+
+
+
+
+
+# 7.2. Merge IDs
+
+
+# rna df
+rna_df <- rna_res %>%
+  dplyr::select(
+    gene_symbol,
+    log2FC_RNA = log2FoldChange,
+    padj_RNA = padj
+  ) %>%
+  filter(!is.na(gene_symbol)) %>%
+  distinct(gene_symbol, .keep_all = TRUE)
+
+# prot df
+prot_df <- prot_res %>%
+  dplyr::select(
+    gene_symbol = gene,
+    log2FC_protein = log2FoldChange,
+    padj_protein = padj
+  ) %>%
+  filter(!is.na(gene_symbol)) %>%
+  distinct(gene_symbol, .keep_all = TRUE)
+
+# Restrict to genes/proteins in both data frames
+merged_df <- inner_join(rna_df, prot_df, by = "gene_symbol")
+
+# Define significance class
+merged_df <- merged_df %>%
+  mutate(
+    sig_class = case_when(
+      padj_RNA < 0.05 & padj_protein < 0.05 ~ "RNA & Protein",
+      padj_RNA < 0.05 ~ "RNA only",
+      padj_protein < 0.05 ~ "Protein only",
+      TRUE ~ "Not Significant")) %>%
+  mutate(
+    point_size = ifelse(sig_class == "RNA & Protein", 2.2, 1.1))
+
+  merged_df$sig_class <- factor(
+  merged_df$sig_class,
+  levels = 
+    c("RNA only", "Protein only", "RNA & Protein", "Not Significant"))
+
+
+
+
+
+
+
+# 7.3. Correlation values
+
+
+cor_spearman <- cor(
+  merged_df$log2FC_RNA,
+  merged_df$log2FC_protein,
+  method = "spearman"
+)
+
+cor_spearman
+
+# Conditional correlation: features significant in both RNA and protein
+cor_spearman_both <- cor(
+  merged_df %>% filter(sig_class == "RNA & Protein") %>% pull(log2FC_RNA),
+  merged_df %>% filter(sig_class == "RNA & Protein") %>% pull(log2FC_protein),
+  method = "spearman"
+)
+
+cor_spearman_both
+
+
+
+
+
+
+# 7.4. Prepare plot content
+
+
+label_df <- merged_df %>%
+  filter(sig_class == "RNA & Protein") %>%
+  mutate(
+    concordance = abs(log2FC_RNA) + abs(log2FC_protein),
+    quadrant = case_when(
+      log2FC_RNA > 0 & log2FC_protein > 0 ~ "URQ",
+      log2FC_RNA < 0 & log2FC_protein < 0 ~ "RLQ",
+      TRUE ~ "Other"
+    )
+  ) %>%
+  
+  # Ensure strong concordant signals are always labeled
+  group_by(quadrant) %>%
+  slice_max(concordance, n = 4) %>%   # 4 URQ + 4 RLQ
+  ungroup() %>%
+  
+  # Add strongest remaining signals overall
+  bind_rows(
+    merged_df %>%
+      filter(sig_class == "RNA & Protein") %>%
+      mutate(concordance = abs(log2FC_RNA) + abs(log2FC_protein)) %>%
+      slice_max(concordance, n = 12)
+  ) %>%
+  distinct(gene_symbol, .keep_all = TRUE)
+
+
+
+
+
+
+# 7.5. RNA vs. Protein concordance plot
+
+
+ggplot(
+  merged_df,
+  aes(x = log2FC_RNA, y = log2FC_protein, color = sig_class)
+) +
+  
+  geom_point(aes(size = point_size), alpha = 0.6) +
+  
+  scale_size_identity() +
+  
+  geom_text_repel(
+  data = label_df,
+  aes(label = gene_symbol),
+  size = 3,
+  box.padding = 0.4,
+  segment.color = "grey70",
+  max.overlaps = 20,
+  show.legend = FALSE
+) +
+  
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey60") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+  scale_color_manual(values = c(
+    "RNA & Protein" = "purple",
+    "RNA only" = "blue",
+    "Protein only" = "red",
+    "Not Significant" = "grey85"
+  )) +
+  
+  theme_classic() +
+  theme_minimal(base_size = 12, base_family = "Helvetica") +
+  
+  labs(
+  x = expression(log[2]*FC: (Transcriptome)),
+  y = expression(log[2]*FC: (Proteome)),
+  title = "RNA–Protein Concordance of LRTI-Associated Features",
+  subtitle = paste0(
+    "All features: Spearman \u03C1 = ", round(cor_spearman, 2),
+    " | Jointly significant: \u03C1 = ",
+    round(cor_spearman_both, 2),
+    " (n = ", nrow(merged_df), ")"
+  ),
+  color = "Significance"
+)
+
+ggsave(file.path(results_dir, "RNA_protein_LFC_concordance.png"),
+  width = 7,
+  height = 6
+)
+
+write.xlsx(merged_df,
+           file.path(results_dir, "lfc_rna_protein_concordance.xlsx"))
+
+
+
+
+
+
+```

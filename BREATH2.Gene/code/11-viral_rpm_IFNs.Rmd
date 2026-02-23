@@ -1,0 +1,441 @@
+---
+title: "11-viral_rpm_IFNs"
+output: html_notebook
+toc: true
+---
+
+```{r}
+#| warning: false
+
+
+
+
+
+
+# 11.1. Import data
+
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(tibble)
+library(msigdbr)
+
+# Import rna norm expr
+rna_norm <- read.csv(
+  file.path(results_dir, "rna_norm.csv"),
+  stringsAsFactors=F)
+
+# Import metadata
+metadata_df_with_folds <- read.csv(
+  file.path(data_dir, "metadata_df_with_folds.csv"),
+  stringsAsFactors=F)
+
+# Import microbe reports
+microbe_reports_bgfilter <- read.csv(
+  file.path(data_dir, "microbe_reports_bgfilter.csv"),
+  stringsAsFactors=F)
+
+# Import protein matrix
+protein_mat <- read.csv(
+  file.path("C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv"),
+  stringsAsFactors=F)
+
+
+
+
+
+
+# 11.2. Select IFN plots
+
+
+# Ensure same patients are used
+microbe_reports_bgfilter <- microbe_reports_bgfilter %>%
+  filter(sample_name %in% metadata_df_with_folds$sample_name)
+
+# Filter to viruses only
+virus_reports <- microbe_reports_bgfilter %>%
+  filter(category == "viruses") %>%
+  mutate(
+    sample_name = factor(
+      sample_name,
+      levels = metadata_df_with_folds$sample_name)) %>%
+  arrange(sample_name)
+
+# Run by dominant virus
+#viral_rpm_df <- virus_reports %>%
+  #group_by(sample_name) %>%
+  #summarize(
+    #viral_rpm = max(nt_rpm, na.rm = TRUE))
+
+# Run by sum viral rpm
+viral_rpm_df <- virus_reports %>%
+  group_by(sample_name) %>%
+  summarize(
+    viral_rpm = sum(nt_rpm, na.rm = TRUE))
+
+# Add back all patients (patients with no viral rpm included with 0)
+viral_rpm_df <- metadata_df_with_folds %>%
+  dplyr::select(sample_name, LRTI_adjudication) %>%
+  left_join(viral_rpm_df, by = "sample_name") %>%
+  mutate(
+    viral_rpm = ifelse(is.na(viral_rpm), 0, viral_rpm)
+  )
+
+write.csv(viral_rpm_df,
+          file.path(results_dir, "viral_rpm_df.csv"),
+          row.names=F)
+
+
+
+
+
+
+# 11.2a. Select Gene IFNs
+
+
+ifn_genes <- c("ISG15", "IFIT2", "IFIT3")
+
+rna_ifn_long <- rna_norm %>%
+  filter(gene_symbol %in% ifn_genes) %>%
+  pivot_longer(
+    cols = -c(gene, gene_symbol),
+    names_to = "sample_name",
+    values_to = "expr"
+  ) %>%
+  mutate(expr_log2 = log2(expr + 1)) %>%
+  group_by(gene_symbol) %>%
+  mutate(expr_scaled = as.numeric(scale(expr_log2))) %>%
+  ungroup()
+
+ifn_rna_df <- rna_ifn_long %>%
+  left_join(
+    viral_rpm_df %>% 
+      dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
+    by = "sample_name"
+  )
+
+# Restrict to Definite LRTI only
+ifn_rna_df_definite <- ifn_rna_df %>%
+  filter(LRTI_adjudication == "Definite")
+
+write.csv(
+  rna_ifn_long,
+  file.path(results_dir, "IFN_RNA_normalized_long.csv"),
+  row.names=F)
+
+
+
+
+
+
+# 11.2b. Select Protein IFNs
+
+
+ifn_proteins <- c("ISG15", "IFIT2", "IFIT3")
+
+protein_ifn_long <- protein_mat %>%
+  rename(patient_id = X) %>%
+  mutate(patient_id = as.integer(patient_id)) %>%
+  dplyr::select(patient_id, all_of(ifn_proteins)) %>%
+  pivot_longer(
+    cols = -patient_id,
+    names_to = "gene_symbol",
+    values_to = "expr_log2"
+  ) %>%
+  group_by(gene_symbol) %>%
+  mutate(expr_scaled = as.numeric(scale(expr_log2))) %>%
+  ungroup() %>%
+  left_join(
+    metadata_df_with_folds %>%
+      dplyr::select(patient_id, sample_name),
+    by = "patient_id"
+  ) %>%
+  left_join(
+    viral_rpm_df,
+    by = "sample_name"
+  ) %>%
+  filter(LRTI_adjudication == "Definite") %>%
+  mutate(modality = "Protein")
+
+ifn_rna_df_definite <- ifn_rna_df_definite %>%
+  mutate(modality = "RNA")
+
+
+
+
+
+
+# 11.2c. Combine RNA/Protein
+
+
+ifn_combined_df <- bind_rows(
+  ifn_rna_df_definite %>%
+    dplyr::select(sample_name, gene_symbol, expr_scaled, viral_rpm, modality),
+  protein_ifn_long %>%
+    dplyr::select(sample_name, gene_symbol, expr_scaled, viral_rpm, modality)
+)
+
+
+
+
+
+
+# 11.2d. Viral RPM vs IFN plot
+
+
+omics_colors <- c(
+  "RNA" = "#4C72B0",
+  "Protein" = "#55A868"
+)
+
+cor_ifn_df <- ifn_combined_df %>%
+  group_by(modality, gene_symbol) %>%
+  summarize(
+    spearman_r = cor(expr_scaled,
+                     log10(viral_rpm + 1),
+                     method = "spearman",
+                     use = "complete.obs"),
+    .groups = "drop"
+  )
+
+ggplot(
+  ifn_combined_df,
+  aes(
+    x = log10(viral_rpm + 1),
+    y = expr_scaled,
+    color = modality
+  )
+) +
+  geom_point(alpha = 0.7, size = 1.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_text(
+  data = cor_ifn_df %>%
+    group_by(gene_symbol) %>%
+    mutate(
+      y_pos = case_when(
+        modality == "RNA" ~ 3.8,      # RNA on top
+        modality == "Protein" ~ 3.45  # Protein just below
+      )
+    ),
+  aes(
+    x = max(log10(ifn_combined_df$viral_rpm + 1)) * 0.98,
+    y = y_pos,
+    label = paste0(modality, ": ρ = ", round(spearman_r, 2))
+  ),
+  inherit.aes = FALSE,
+  size = 3,
+  hjust = 1
+) +
+  facet_wrap(~ gene_symbol) +
+  coord_cartesian(ylim = c(-3, 3.8)) +
+  scale_color_manual(values = omics_colors) +
+  theme_classic(base_size = 12) +
+  theme(
+  text = element_text(family = "Helvetica")) +
+  labs(
+  x = "log10 Viral RPM (+1)",
+  y = "Standardized abundance (z-score)",
+  title = "Viral Load–Dependent IFN Expression",
+  subtitle = "RNA and protein shown separately for each IFN"
+)
+
+# Save plot
+ggsave(
+  filename = file.path(results_dir, "Viral_RPM_vs_IFN_RNA_Protein.png"),
+  plot = last_plot(),
+  width = 9,
+  height = 5,
+  dpi = 300
+)
+
+
+
+
+
+# 11.3. Composite IFN score plot
+
+
+ifn_geneset <- msigdbr(
+  species = "Homo sapiens",
+  category = "H"
+) %>%
+  filter(gs_name %in% c(
+    "HALLMARK_INTERFERON_ALPHA_RESPONSE",
+    "HALLMARK_INTERFERON_GAMMA_RESPONSE"
+  )) %>%
+  pull(gene_symbol) %>%
+  unique()
+
+
+
+
+
+
+# 11.3a. Calculate RNA score
+
+
+hallmark_ifn_genes <- intersect(ifn_geneset, rna_norm$gene_symbol)
+
+# Build long format RNA table for IFN genes
+rna_ifn_hallmark_long <- rna_norm %>%
+  filter(gene_symbol %in% hallmark_ifn_genes) %>%
+  pivot_longer(
+    cols = -c(gene, gene_symbol),
+    names_to = "sample_name",
+    values_to = "expr"
+  ) %>%
+  mutate(expr_log2 = log2(expr + 1))
+
+# Calculate composite IFN score per sample
+ifn_score_df <- rna_ifn_hallmark_long %>%
+  group_by(gene_symbol) %>%
+  mutate(expr_scaled = scale(expr_log2)) %>%  # scale per gene
+  ungroup() %>%
+  group_by(sample_name) %>%
+  summarize(IFN_score = mean(expr_scaled, na.rm = TRUE))
+
+summary(ifn_score_df$IFN_score)
+nrow(ifn_score_df)
+
+# Merge with viral RPM and LRTI adjudication info
+ifn_score_plot_df <- ifn_score_df %>%
+  left_join(
+    viral_rpm_df %>% 
+      dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
+    by = "sample_name"
+  )
+
+# Filter to Definite LRTI cases only
+ifn_score_plot_df_definite <- ifn_score_plot_df %>%
+  filter(LRTI_adjudication == "Definite")
+
+ifn_score_plot_df_definite <- ifn_score_plot_df_definite %>%
+  mutate(modality = "RNA")
+
+
+
+
+
+
+# 11.3b. Calculate protein score
+
+
+protein_ifn_hallmark_long <- protein_mat %>%
+  rename(patient_id = X) %>%                  
+  mutate(patient_id = as.integer(patient_id)) %>%
+  pivot_longer(
+    cols = -patient_id,
+    names_to = "gene_symbol",
+    values_to = "expr_log2"
+  ) %>%
+  filter(gene_symbol %in% hallmark_ifn_genes) %>%
+  left_join(
+    metadata_df_with_folds %>%
+      dplyr::select(patient_id, sample_name),
+    by = "patient_id"
+  )
+
+protein_ifn_score_df <- protein_ifn_hallmark_long %>%
+  group_by(gene_symbol) %>%
+  mutate(expr_scaled = scale(expr_log2)) %>%   # scale per protein
+  ungroup() %>%
+  group_by(sample_name) %>%
+  summarize(IFN_score = mean(expr_scaled, na.rm = TRUE)) %>%
+  mutate(modality = "Protein")
+
+ifn_score_combined_df <- bind_rows(
+  ifn_score_plot_df_definite %>%
+    dplyr::select(sample_name, viral_rpm, IFN_score, modality),
+  protein_ifn_score_df %>%
+    left_join(
+      viral_rpm_df %>%
+        dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
+      by = "sample_name"
+    ) %>%
+    filter(LRTI_adjudication == "Definite") %>%
+    dplyr::select(sample_name, viral_rpm, IFN_score, modality)
+)
+
+
+
+
+
+
+# 11.3c. Plot composite score
+
+
+cor_composite_df <- ifn_score_combined_df %>%
+  group_by(modality) %>%
+  summarize(
+    spearman_r = cor(IFN_score,
+                     log10(viral_rpm + 1),
+                     method = "spearman"),
+    .groups = "drop"
+  )
+
+ggplot(
+  ifn_score_combined_df,
+  aes(
+    x = log10(viral_rpm + 1),
+    y = IFN_score,
+    color = modality
+  )
+) +
+  geom_point(alpha = 0.7, size = 1.8) +
+  geom_smooth(method = "lm", se = TRUE) +
+  geom_text(
+  data = cor_composite_df %>% 
+    mutate(
+      y_pos = case_when(
+        modality == "RNA" ~ -1.3,     # RNA label on top
+        modality == "Protein" ~ -1.5  # Protein label just below
+      )
+    ),
+  aes(
+    x = max(log10(ifn_score_combined_df$viral_rpm + 1)) * 0.98,
+    y = y_pos,
+    label = paste0(modality, ": ρ = ", round(spearman_r, 2))
+  ),
+  inherit.aes = FALSE,
+  size = 4,
+  hjust = 1
+) +
+  coord_cartesian(ylim = c(-1.7,1.5)) +
+  scale_color_manual(values = omics_colors) +
+  theme_classic() +
+  theme(
+  text = element_text(family = "Helvetica")) +
+  labs(
+    x = "log10 Viral RPM (+1)",
+    y = "Composite IFN score (z-score)",
+    title = "Viral Load vs Composite Interferon Response",
+    subtitle = "Hallmark IFNα + IFNγ pathways (RNA and protein)"
+  )
+
+  #geom_text(
+    #data = cor_df,
+    #aes(
+      #x = max(log10(ifn_score_combined_df$viral_rpm + 1)), 
+      #y = y_pos,
+      #label = paste0("Spearman \u03C1 = ", round(spearman_r, 3))
+    #),
+    #inherit.aes = FALSE,
+    #hjust = 1.05,
+    #size = 4)
+
+# Save plot
+ggsave(
+  filename = file.path(results_dir, "Composite_IFN_score_vs_Viral_RPM.png"),
+  plot = last_plot(),
+  width = 7,
+  height = 5,
+  dpi = 300
+)
+
+
+
+
+
+
+```

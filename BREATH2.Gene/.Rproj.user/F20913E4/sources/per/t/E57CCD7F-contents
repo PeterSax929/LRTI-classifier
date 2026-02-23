@@ -1,0 +1,240 @@
+---
+title: "06-differential_expr"
+output: html_notebook
+toc: true
+---
+
+```{r}
+#| warning: false
+
+
+
+
+
+
+# 6.1. Import data
+
+
+library(edgeR)
+library(limma)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+library(ggrepel)
+
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+secure_data_dir <- "C:/Users/User/Documents/UCSF/secure_data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+
+metadata_df_with_folds <- read.csv(
+  file.path(data_dir, "metadata_df_with_folds.csv"),
+  stringsAsFactors=F)
+
+host_counts <- read.csv(
+  file.path(data_dir, "host_gene_counts.csv"),
+  stringsAsFactors=F, row.names = 1)[, -1]
+
+# Restrict to samples in metadata
+counts <- host_counts[, metadata_df_with_folds$sample_name, drop=F]
+
+stopifnot(all(colnames(counts) == metadata_df_with_folds$sample_name))
+
+
+
+
+
+
+# 6.2. Filtering + TMM normalization
+
+
+# Define group
+group <- factor(
+  metadata_df_with_folds$LRTI_adjudication,
+  levels=c("No Evidence","Definite")
+)
+
+# Build DGEList
+dge <- DGEList(counts=counts, group=group)
+
+# Apply filtering 
+keep <- rowSums(dge$counts > 10) > 0.2 * ncol(dge$counts)
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+
+# TMM normalization (standard RNA-seq scaling)
+dge <- calcNormFactors(dge, method="TMM")
+
+# Check dimensions
+dim(dge)
+
+
+
+
+
+
+# 6.3. voom transformation
+
+
+# Ensure covariates are correct type
+metadata_df_with_folds$sex <- factor(metadata_df_with_folds$sex)
+metadata_df_with_folds$age_in_years <- as.numeric(metadata_df_with_folds$age_in_years)
+
+# Design matrix with covariates
+design <- model.matrix(
+  ~ group + age_in_years + sex,
+  data = metadata_df_with_folds)
+
+# Apply voom
+v <- voom(dge, design, plot=TRUE)
+
+# Sanity check
+colnames(design)
+dim(v$E)
+
+
+
+
+
+
+# 6.4. Linear modeling with limma
+
+
+# Fit gene-wise linear models
+fit <- lmFit(v, design)
+
+# Empirical Bayes moderation
+fit <- eBayes(fit)
+
+# View coefficient names
+colnames(coef(fit))
+
+de_results <- topTable(
+  fit,
+  coef="groupDefinite",
+  number=Inf,
+  sort.by="P"
+)
+
+# Convert to data frame
+de_results <- as.data.frame(de_results) %>%
+  rownames_to_column("gene")
+
+
+
+
+
+
+# 6.5. Format limma results for volcano plot
+
+# Rename columns to match your previous DESeq2 object
+res_df <- de_results %>%
+  dplyr::rename(
+    log2FoldChange = logFC,
+    padj = adj.P.Val
+  ) %>%
+  mutate(
+    padj = ifelse(is.na(padj), 1, padj),
+    log2FoldChange = ifelse(is.na(log2FoldChange), 0, log2FoldChange),
+    negLog10P = -log10(padj + 1e-300)
+  )
+
+# Map ENSG to gene symbol
+res_df$gene_symbol <- ensg2gene[res_df$gene]
+res_df$gene_symbol[is.na(res_df$gene_symbol)] <- res_df$gene
+
+# Significance flag
+res_df <- res_df %>%
+  mutate(sig = padj < 0.05)
+
+# Biological direction
+res_df <- res_df %>%
+  mutate(direction = case_when(
+    padj < 0.05 & log2FoldChange > 0  ~ "Definite",
+    padj < 0.05 & log2FoldChange < 0  ~ "NoEvidence",
+    TRUE                              ~ "NotSignificant"
+  ))
+
+# Top 10 in each direction
+top_definite  <- res_df %>%
+  filter(direction=="Definite") %>%
+  arrange(abs(log2FoldChange)) %>%
+  tail(10)
+
+top_noEvidence <- res_df %>%
+  filter(direction=="NoEvidence") %>%
+  arrange(abs(log2FoldChange)) %>%
+  tail(10)
+
+top_labels <- bind_rows(top_definite, top_noEvidence)
+
+
+
+
+
+
+# 6.6 Volcano Plot
+
+
+ggplot(res_df, aes(x=log2FoldChange, y=negLog10P)) +
+  geom_point(aes(color=direction), alpha=0.6) +
+  scale_color_manual(
+    values=c(
+      "Definite"="red",
+      "NoEvidence"="blue",
+      "NotSignificant"="grey85"
+    ),
+    breaks=c("Definite","NoEvidence"),
+    labels=c(
+      "Definite"="Upregulated in Definite LRTI",
+      "NoEvidence"="Downregulated in Definite LRTI"
+    ),
+    name=NULL
+  ) +
+  geom_vline(xintercept=c(-1,1), linetype="dashed", color="grey40") +
+  geom_hline(yintercept=-log10(0.05), linetype="dashed") +
+  theme_minimal(base_size = 14, base_family = "Helvetica") +
+  theme(
+    legend.position="bottom",
+    legend.direction="horizontal",
+    plot.caption=element_text(
+      size=14,
+      face="bold",
+      color="black",
+      hjust=0.5
+    ),
+    plot.caption.position="plot"
+  ) +
+  labs(
+    x=expression(log[2]*FC),
+    y=expression(-log[10](P[adj])),
+    title="Volcano plot - host counts (limma-voom)",
+    caption=paste("Differentially expressed genes:", sum(res_df$sig))
+  ) +
+  coord_fixed(ratio=0.6) +
+  geom_text_repel(
+    data=top_labels,
+    aes(label=gene_symbol),
+    size=3,
+    max.overlaps=30
+  )
+
+# Save results
+write.csv(res_df,
+          file.path(results_dir, "DE_limma_results_transcriptome.csv"),
+          row.names=F)
+
+ggsave(file.path(results_dir, "volcano_transcriptome.png"), 
+       width = 8, height = 10)
+
+
+
+
+
+
+```
+
+
+
+
+
+
+

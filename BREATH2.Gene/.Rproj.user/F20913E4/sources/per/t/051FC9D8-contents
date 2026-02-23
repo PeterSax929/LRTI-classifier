@@ -1,0 +1,630 @@
+---
+title: "09-pathway_analysis_gsea"
+output: html_notebook
+toc: true
+---
+
+```{r}
+#| warning: false
+
+
+
+
+
+
+# 9.1. Import data
+
+
+library(clusterProfiler)
+library(msigdbr)
+library(org.Hs.eg.db)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tidyr)
+library(enrichplot)
+
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+
+rna_res <- read.csv(
+  file.path(results_dir, "DE_limma_results_transcriptome.csv"),
+  stringsAsFactors=F)
+
+
+
+
+
+
+# 9.2. Ranked Genes List
+
+
+# Use gene symbols and log2FC
+gsea_df <- rna_res %>%
+  filter(!is.na(gene_symbol)) %>%
+  distinct(gene_symbol, .keep_all = TRUE)
+
+# Named numeric vector: log2FC, names = gene symbols
+gene_ranks <- gsea_df$log2FoldChange
+names(gene_ranks) <- gsea_df$gene_symbol
+
+# Sort decreasing (required)
+gene_ranks <- sort(gene_ranks, decreasing = TRUE)
+
+
+
+
+
+
+# 9.3. Hallmark GSEA
+
+
+hallmark_sets <- msigdbr(
+  species  = "Homo sapiens",
+  category = "H"
+) %>%
+  dplyr::select(gs_name, gene_symbol)
+
+gsea_hallmark <- GSEA(
+  geneList     = gene_ranks,
+  TERM2GENE    = hallmark_sets,
+  pvalueCutoff = 0.05,
+  eps          = 0,
+  verbose      = FALSE
+)
+
+hallmark_df <- as.data.frame(gsea_hallmark)
+
+write.csv(hallmark_df,
+  file.path(results_dir, "GSEA_Hallmark_transcriptome.csv"),
+  row.names=F)
+
+
+
+
+
+
+# 9.4. Reactome GSEA
+
+
+reactome_sets <- msigdbr(
+  species     = "Homo sapiens",
+  category    = "C2",
+  subcategory = "CP:REACTOME"
+) %>%
+  dplyr::select(gs_name, gene_symbol)
+
+gsea_reactome <- GSEA(
+  geneList     = gene_ranks,
+  TERM2GENE    = reactome_sets,
+  pvalueCutoff = 0.05,
+  verbose      = FALSE
+)
+
+reactome_df <- as.data.frame(gsea_reactome)
+
+write.csv(
+  reactome_df,
+  file.path(results_dir, "GSEA_Reactome_transcriptome.csv"),
+  row.names=F)
+
+
+
+
+# 9.5. Hallmark Pathway Plot
+
+
+# View top Hallmark pathways by magnitude of enrichment
+gsea_hallmark@result %>%
+  filter(p.adjust < 0.05) %>%
+  arrange(desc(abs(NES))) %>%
+  dplyr::select(ID, Description, NES, p.adjust) %>%
+  head(10)
+
+gseaplot2(
+  gsea_hallmark,
+  geneSetID = "HALLMARK_INTERFERON_GAMMA_RESPONSE",
+  title = "Hallmark IFNγ Response – Transcriptome",
+  base_size = 12
+)
+
+gseaplot2(
+  gsea_hallmark,
+  geneSetID = "HALLMARK_INTERFERON_ALPHA_RESPONSE",
+  title = "Hallmark IFNα Response – Transcriptome",
+  base_size = 12
+)
+
+# IFNγ
+p_ifng <- gseaplot2(
+  gsea_hallmark,
+  geneSetID = "HALLMARK_INTERFERON_GAMMA_RESPONSE",
+  title = "Hallmark IFNγ Response",
+  base_size = 12,
+  subplots = c(1, 2, 3),   # ES, ranked list, gene hits
+  pvalue_table = TRUE     # adds NES, p, FDR
+) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+# IFNα
+p_ifna <- gseaplot2(
+  gsea_hallmark,
+  geneSetID = "HALLMARK_INTERFERON_ALPHA_RESPONSE",
+  title = "Hallmark IFNα Response",
+  base_size = 12,
+  subplots = c(1, 2, 3),
+  pvalue_table = TRUE
+) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+# Print plots
+p_ifng
+p_ifna
+
+# Save plots
+ggsave(
+  file.path(results_dir, "GSEA_IFNG_transcriptome.png"),
+  p_ifng,
+  width = 7,
+  height = 6
+)
+
+ggsave(
+  file.path(results_dir, "GSEA_IFNA_transcriptome.png"),
+  p_ifna,
+  width = 7,
+  height = 6
+)
+
+
+
+
+
+
+# 9.6. Reactome Pathway Plot
+
+
+# View top Reactome pathways
+gsea_reactome@result %>%
+  arrange(desc(abs(NES))) %>%
+  head(20) %>%
+  dplyr::select(ID, Description, NES, p.adjust)
+
+p_reactome_ifn <- gseaplot2(
+  gsea_reactome,
+  geneSetID = "REACTOME_INTERFERON_ALPHA_BETA_SIGNALING",
+  title = "Reactome IFNα/β Signaling – Transcriptome",
+  base_size = 12
+)
+
+# Print plot
+p_reactome_ifn
+
+# Save plot
+ggsave(
+  filename = file.path(results_dir, "GSEA_Reactome_IFN_alpha_beta.png"),
+  plot = p_reactome_ifn,
+  width = 7,
+  height = 6,
+  dpi = 300
+)
+
+
+
+
+
+
+# 9.7. Hallmark GSEA summary dot plot
+
+
+hallmark_plot_df <- gsea_hallmark@result %>%
+  filter(p.adjust < 0.05) %>%
+  mutate(
+    neglogPadj = -log10(p.adjust),
+    Direction = ifelse(NES > 0, "Up", "Down"),
+    Description = factor(
+      Description,
+      levels = Description[order(NES)]
+    )
+  )
+
+p_hallmark_all <- ggplot(
+  hallmark_plot_df,
+  aes(y = Description, x = NES)
+) +
+  # Center line (NES = 0)
+  geom_vline(xintercept = 0, linewidth = 0.8, color = "black") +
+
+  # Stems
+  geom_segment(
+    aes(x = 0, xend = NES, yend = Description),
+    linewidth = 0.7,
+    color = "grey60"
+  ) +
+
+  # OPTION 1: COLOR BY padj
+  #geom_point(
+    #aes(color = neglogPadj),
+    #size = 4
+  #) +
+  #scale_color_viridis_c(
+    #name = expression(-log[10]~padj),
+    #option = "C"
+  #) +
+
+  # OPTION 2: COLOR BY DIRECTION
+     geom_point(
+    aes(fill = Direction),
+    shape = 21,          # allows fill + outline
+    size = 4,
+    color = "black",     # black border
+    stroke = 1.2         # thickness of border
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Up" = "red3",
+      "Down" = "blue3"
+    ),
+    breaks = c("Up", "Down"),  # ensures Up appears first
+    labels = c(
+      "Up" = "Upregulated in Definite LRTI",
+      "Down" = "Downregulated in Definite LRTI"
+    ),
+    name = NULL
+  ) +
+
+
+  theme_classic(base_size = 12) +
+  theme(
+    legend.direction = "vertical",   
+    legend.justification = "left",
+    legend.position = "bottom",
+    legend.text = element_text(size = 11),
+    legend.key.width = unit(1.2, "lines"),
+
+    # Center title across entire figure
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+
+    # Add right margin so labels don't clip
+    plot.margin = ggplot2::margin(t = 10, r = 40, b = 10, l = 10)
+  ) +
+  labs(
+    title = "Hallmark Pathway Enrichment (GSEA)",
+    subtitle = "Transcriptome; pathways ordered by normalized enrichment score",
+    x = "Normalized Enrichment Score (NES)",
+    y = NULL
+  ) +
+  xlim(-3, 5)
+
+# Print plot
+p_hallmark_all
+
+# Save plot
+ggsave(
+  filename = file.path(results_dir, "GSEA_Hallmark_all_pathways.png"),
+  plot = p_hallmark_all,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+
+
+
+
+
+# 9.8. Reactome GSEA summary dot plot
+
+
+reactome_plot_df <- gsea_reactome@result %>%
+  filter(p.adjust < 0.05) %>%
+  mutate(
+    neglogPadj = -log10(p.adjust),
+    Direction = ifelse(NES > 0, "Up", "Down")
+  )
+
+# Top 10 UP (positive NES)
+reactome_top_up <- reactome_plot_df %>%
+  filter(NES > 0) %>%
+  arrange(desc(NES)) %>%
+  slice_head(n = 8)  # top 10
+
+# Top 10 DOWN (negative NES)
+reactome_top_down <- reactome_plot_df %>%
+  filter(NES < 0) %>%
+  arrange(NES) %>%      
+  slice_head(n = 8)  # top 10 negative
+
+reactome_top20 <- bind_rows(reactome_top_up, reactome_top_down) %>%
+  mutate(
+    Description = gsub("_", " ", Description),
+    Description = str_wrap(Description, width = 40),
+    Description = factor(Description, levels = Description[order(NES)])
+  )
+
+# Check
+reactome_top20 %>% dplyr::select(Description, NES, neglogPadj, Direction)
+
+# Plot
+p_reactome_top20 <- ggplot(
+  reactome_top20,
+  aes(y = Description, x = NES)
+) +
+  # Center line (NES = 0)
+  geom_vline(xintercept = 0, linewidth = 0.8, color = "black") +
+
+  # Stems
+  geom_segment(
+    aes(x = 0, xend = NES, yend = Description),
+    linewidth = 0.7,
+    color = "grey60"
+  ) +
+
+  # Black outline
+geom_point(
+  shape = 21,
+  size = 4,
+  fill = NA,
+  color = "black",
+  stroke = 1.2
+) +
+
+# Filled points
+geom_point(
+  aes(fill = Direction),
+  shape = 21,
+  size = 4
+) +
+
+  scale_fill_manual(
+  values = c(
+    "Up" = "red3",
+    "Down" = "blue3"
+  ),
+  breaks = c("Up", "Down"),
+  labels = c(
+    "Up" = "Upregulated in Definite LRTI",
+    "Down" = "Downregulated in Definite LRTI"
+  ),
+  name = NULL
+) +
+
+
+  # Styling
+  theme_classic(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+  legend.direction = "vertical",
+  legend.justification = "left",
+  legend.text = element_text(size = 11),
+  legend.key.width = unit(1.2, "lines"),
+
+    axis.text.y = element_text(size = 9),  # smaller font
+    # Center title across entire figure
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    # Add right margin so labels don't clip
+    plot.margin = ggplot2::margin(t = 10, r = 40, b = 10, l = 10)
+  ) +
+  labs(
+    title = "Reactome Pathway Enrichment (GSEA)",
+    subtitle = "Transcriptome; top 8 up and top 8 down pathways",
+    x = "Normalized Enrichment Score (NES)",
+    y = NULL
+  ) +
+  xlim(-5, 5)
+
+# Print plot
+p_reactome_top20
+
+# Save plot
+ggsave(
+  filename = file.path(results_dir, "GSEA_Reactome_top20_pathways.png"),
+  plot = p_reactome_top20,
+  width = 8,
+  height = 8,
+  dpi = 300
+)
+
+
+```
+```{r}
+
+
+
+# 9.9. RNA vs Protein PA dot plot
+
+
+protein_ranks_df <- read.csv(
+  file.path(
+    "C:/Users/User/Documents/UCSF/BREATH2.Prot/results/protein_ranks_for_RNA_GSEA.csv"),
+  stringsAsFactors=F)
+
+protein_ranks <- protein_ranks_df$log2FC
+names(protein_ranks) <- protein_ranks_df$gene
+
+# Re-sort
+protein_ranks <- sort(protein_ranks, decreasing = TRUE)
+
+gsea_hallmark_rna_all <- GSEA(
+  geneList     = gene_ranks,
+  TERM2GENE    = hallmark_sets,
+  pvalueCutoff = 1,
+  eps          = 0,
+  verbose      = FALSE
+)
+
+gsea_hallmark_prot_all <- GSEA(
+  geneList     = protein_ranks,
+  TERM2GENE    = hallmark_sets,
+  pvalueCutoff = 1,
+  eps          = 0,
+  verbose      = FALSE
+)
+
+
+
+
+
+
+# 9.9a. Hallmark RNA and protein
+
+
+rna_df <- gsea_hallmark_rna_all@result %>%
+  dplyr::select(
+    ID,
+    Description,
+    NES_rna = NES,
+    padj_rna = p.adjust
+  )
+
+prot_df <- gsea_hallmark_prot_all@result %>%
+  dplyr::select(
+    ID,
+    NES_prot = NES,
+    padj_prot = p.adjust
+  )
+
+hallmark_compare_df <- full_join(
+  rna_df,
+  prot_df,
+  by = "ID"
+) %>%
+  mutate(
+    combined_abs_NES = abs(NES_rna) + abs(NES_prot)
+  )
+
+hallmark_to_plot <- hallmark_compare_df %>%
+  arrange(desc(combined_abs_NES)) %>%
+  slice_head(n = 16)
+
+hallmark_to_plot %>%
+  dplyr::select(
+    Description,
+    NES_rna,
+    NES_prot,
+    padj_rna,
+    padj_prot
+  )
+
+
+
+
+
+
+# 9.9b. Plot content
+
+
+plot_df <- hallmark_to_plot %>%
+  dplyr::select(
+    ID, Description,
+    NES_rna, padj_rna,
+    NES_prot, padj_prot
+  ) %>%
+  pivot_longer(
+    cols = c(NES_rna, NES_prot),
+    names_to = "Omics",
+    values_to = "NES"
+  ) %>%
+  mutate(
+    padj = ifelse(Omics == "NES_rna", padj_rna, padj_prot),
+    Omics = ifelse(Omics == "NES_rna", "RNA", "Protein"),
+
+    # Significance flag 
+    Significant = padj < 0.05,
+
+    # Clean pathway names
+    Description = str_wrap(gsub("_", " ", Description), width = 40)
+  )
+
+omics_colors <- c(
+  "RNA" = "#4C72B0",      # muted blue
+  "Protein" = "#55A868"  # muted green
+)
+
+
+
+
+
+
+# 9.9c. Dot plot
+
+
+p_compare <- ggplot(
+  plot_df,
+  aes(y = Description, x = NES)
+) +
+  # Center line
+  geom_vline(xintercept = 0, linewidth = 0.8, color = "black") +
+
+  # Stems
+  geom_segment(
+    aes(x = 0, xend = NES, yend = Description),
+    linewidth = 0.55,
+    color = "grey75"
+  ) +
+
+  # Points: filled if significant, hollow if not
+  geom_point(
+    aes(
+      fill  = ifelse(Significant, Omics, "NotSig"),
+      color = Omics
+    ),
+    shape = 21,
+    size = 4.2,
+    stroke = 1.2
+  ) +
+
+  scale_fill_manual(
+    values = c(
+      "RNA"     = "#4C72B0",
+      "Protein" = "#55A868",
+      "NotSig"  = "white"
+    ),
+    guide = "none"   # prevents duplicate legend
+  ) +
+
+  scale_color_manual(values = omics_colors) +
+
+  theme_classic(base_size = 12) +
+  theme(
+    axis.text.y = element_text(size = 9),
+    plot.title.position = "plot",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "top",
+    plot.margin = ggplot2::margin(t = 8, r = 20, b = 8, l = 10)
+  ) +
+  labs(
+    title = "Hallmark Pathway Enrichment: RNA vs Protein",
+    subtitle = "Top pathways ranked by combined |NES|\nFilled = padj < 0.05",
+    x = "Normalized Enrichment Score (NES)",
+    y = NULL,
+    color = "Omics layer"
+  ) +
+  xlim(-2.5, 4.5)
+
+# Print plot
+p_compare
+
+# Save plot
+ggsave(
+  filename = file.path(results_dir, "GSEA_Hallmark_RNA_vs_Protein.png"),
+  plot = p_compare,
+  width = 8,
+  height = 7,
+  dpi = 300
+)
+
+
+
+
+
+```

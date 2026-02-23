@@ -1,0 +1,27 @@
+{
+    "id": "35E6649F",
+    "path": "~/UCSF/BREATH2.Gene/code/01-data_import.Rmd",
+    "project_path": "code/01-data_import.Rmd",
+    "type": "r_markdown",
+    "hash": "681186623",
+    "contents": "",
+    "dirty": false,
+    "created": 1770269808322.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "23,66",
+        "scrollLine": "12",
+        "chunk_output_type": "inline"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1771870607,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1771870607049,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,27 @@
+{
+    "id": "0169A016",
+    "path": "~/UCSF/BREATH2.Gene/code/05-roc_curve_auc.Rmd",
+    "project_path": "code/05-roc_curve_auc.Rmd",
+    "type": "r_markdown",
+    "hash": "927581805",
+    "contents": "",
+    "dirty": false,
+    "created": 1770269811069.0,
+    "source_on_save": false,
+    "relative_order": 6,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "21,60",
+        "scrollLine": "28",
+        "chunk_output_type": "inline"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1771871114,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1771871115002,
+    "read_only": false,
+    "read_only_alternatives": []
+}

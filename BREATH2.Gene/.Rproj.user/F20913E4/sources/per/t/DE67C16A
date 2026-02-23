@@ -1,0 +1,27 @@
+{
+    "id": "DE67C16A",
+    "path": "~/UCSF/BREATH2.Gene/code/03-lasso_vst.Rmd",
+    "project_path": "code/03-lasso_vst.Rmd",
+    "type": "r_markdown",
+    "hash": "349378197",
+    "contents": "",
+    "dirty": false,
+    "created": 1770269810081.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "25,60",
+        "scrollLine": "0",
+        "chunk_output_type": "inline"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1771871054,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1771871054951,
+    "read_only": false,
+    "read_only_alternatives": []
+}

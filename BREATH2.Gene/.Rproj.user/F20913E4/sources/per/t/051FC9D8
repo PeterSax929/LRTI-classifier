@@ -1,0 +1,27 @@
+{
+    "id": "051FC9D8",
+    "path": "~/UCSF/BREATH2.Gene/code/09-pathway_analysis_gsea.Rmd",
+    "project_path": "code/09-pathway_analysis_gsea.Rmd",
+    "type": "r_markdown",
+    "hash": "852160663",
+    "contents": "",
+    "dirty": false,
+    "created": 1770269814024.0,
+    "source_on_save": false,
+    "relative_order": 10,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "27,66",
+        "scrollLine": "0",
+        "chunk_output_type": "inline"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1771871540,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1771871540688,
+    "read_only": false,
+    "read_only_alternatives": []
+}

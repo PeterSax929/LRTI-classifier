@@ -1,0 +1,27 @@
+{
+    "id": "D8F06561",
+    "path": "~/UCSF/BREATH2.Gene/code/04-random_forest.Rmd",
+    "project_path": "code/04-random_forest.Rmd",
+    "type": "r_markdown",
+    "hash": "1920472964",
+    "contents": "",
+    "dirty": false,
+    "created": 1770269810578.0,
+    "source_on_save": false,
+    "relative_order": 5,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "24,60",
+        "scrollLine": "16",
+        "chunk_output_type": "inline"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1771871721,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1771871722001,
+    "read_only": false,
+    "read_only_alternatives": []
+}

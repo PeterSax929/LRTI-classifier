@@ -1,0 +1,28 @@
+{
+    "id": "4DC96502",
+    "path": "~/UCSF/BREATH2.Gene/Gene.Classifier.qmd",
+    "project_path": "Gene.Classifier.qmd",
+    "type": "quarto_markdown",
+    "hash": "172343738",
+    "contents": "",
+    "dirty": false,
+    "created": 1763595213600.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "2681,0",
+        "scrollLine": "0",
+        "docOutlineVisible": "0",
+        "ignored_words": "rsample\n"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1770350009,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1771363261059,
+    "read_only": false,
+    "read_only_alternatives": []
+}
