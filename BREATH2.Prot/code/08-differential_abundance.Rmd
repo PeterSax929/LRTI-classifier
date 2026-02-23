@@ -1,0 +1,179 @@
+---
+title: "08-differential_abundance"
+output: html_notebook
+toc: true
+---
+
+```{r}
+#| warning: false
+
+
+
+
+
+
+# 8.1. Import data
+
+
+library(limma)
+library(ggplot2)
+library(ggrepel)
+library(dplyr)
+library(tibble)
+
+# Set file paths
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+
+# Import csvs
+metadata_df_with_folds <- read.csv(
+  file.path(data_dir, "patient_info_with_folds.csv"),
+  stringsAsFactors=F)
+
+protein_mat <- read.csv(
+  file.path(data_dir, "protein_mat.csv"),
+  stringsAsFactors=F, row.names=1)
+
+# Ensure metadata rows are aligned to protein_mat (safety check)
+metadata_df_with_folds <- metadata_df_with_folds %>%
+  filter(patient_id %in% rownames(protein_mat)) %>%
+  column_to_rownames("patient_id")
+
+# Subset protein matrix to matched ordering (safety check)
+protein_mat <- protein_mat[rownames(metadata_df_with_folds), ]
+
+
+
+
+
+
+# 8.2. Limma DA
+
+
+# Create design matrix (Definite vs No Evidence)
+metadata_df_with_folds$LRTI_adjudication <- factor(
+  metadata_df_with_folds$LRTI_adjudication,
+  levels = c("No Evidence", "Definite"))
+
+design <- model.matrix(~ LRTI_adjudication, data = metadata_df_with_folds)
+
+# Fit linear model
+fit <- lmFit(t(protein_mat), design)   # transpose so features = rows
+
+fit <- eBayes(fit)
+
+# Extract results
+res <- topTable(
+  fit,
+  coef = "LRTI_adjudicationDefinite",
+  number = Inf,
+  sort.by = "P")
+
+# Convert to dataframe with gene column
+res_df <- res %>%
+  rownames_to_column("gene") %>%
+  mutate(
+    padj = adj.P.Val,
+    log2FoldChange = logFC,          
+    negLog10P = -log10(padj + 1e-300))
+
+
+
+
+
+
+# 8.3. Volcano Plot
+
+
+# 8.3a. Plot content
+
+
+# Significance flag first
+res_df <- res_df %>%
+  mutate(sig = padj < 0.05)
+
+# Then define direction
+res_df <- res_df %>%
+  mutate(direction = case_when(
+    sig & log2FoldChange > 0  ~ "Definite",
+    sig & log2FoldChange < 0  ~ "NoEvidence",
+    TRUE                      ~ "NotSignificant"
+  ))
+
+# Top 10 significant proteins per direction
+top_definite <- res_df %>% 
+  filter(direction == "Definite") %>%
+  arrange(abs(log2FoldChange)) %>%
+  head(10)
+
+top_noEvidence <- res_df %>% 
+  filter(direction == "NoEvidence") %>%
+  arrange(abs(log2FoldChange)) %>%
+  head(10)
+
+top_labels <- bind_rows(top_definite, top_noEvidence)
+
+
+
+
+
+
+# 8.3b. ggplot
+
+
+# Volcano Plot
+ggplot(res_df, aes(x = log2FoldChange, y = negLog10P)) +
+  geom_point(aes(color = direction), alpha = 0.6) +
+  scale_color_manual(
+    values = c(
+      "Definite" = "red",
+      "NoEvidence" = "blue",
+      "NotSignificant" = "grey85"
+    ),
+    breaks = c("Definite","NoEvidence"),
+    labels = c(
+      "Definite" = "Upregulated in Definite LRTI",
+      "NoEvidence" = "Downregulated in Definite LRTI"
+    ),
+    name = NULL
+  ) +
+  geom_vline(xintercept = c(-1,1), linetype="dashed", color="grey40") +
+  geom_hline(yintercept = -log10(0.05), linetype="dashed") +
+  theme_minimal(base_size = 14, base_family = "Helvetica") +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    plot.caption = element_text(size = 14, face="bold", hjust = 0.5),
+    plot.caption.position = "plot"
+  ) +
+  labs(
+    x = expression(log[2]*FC),
+    y = expression(-log[10](P[adj])),
+    title = "Volcano plot - Proteomics Differential Abundance",
+    caption = paste("Differentially expressed proteins:", sum(res_df$sig))
+  ) +
+  coord_fixed(ratio = 0.3) +
+  geom_text_repel(
+    data = bind_rows(
+      res_df %>% filter(direction == "Definite") %>% slice_min(padj, n=10),
+      res_df %>% filter(direction == "NoEvidence") %>% slice_min(padj, n=10)
+    ),
+    aes(label = gene),
+    size = 3,
+    max.overlaps = 30
+  )
+
+# Save results
+write.csv(res_df,
+          file.path(results_dir, "DA_results_proteomics.csv"),
+          row.names=F)
+
+ggsave(file.path(results_dir, "volcano_proteome.png"),
+       width = 8, height = 10)
+
+
+
+
+
+
+```

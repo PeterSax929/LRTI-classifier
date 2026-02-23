@@ -1,0 +1,129 @@
+---
+title: "01-data_import"
+output: html_notebook
+toc: true
+---
+
+```{r}
+#| warning: false
+
+
+
+
+
+
+# 1.1. Import metadata and protein matrix
+
+
+# Set file paths
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
+secure_data_dir <- "C:/Users/User/Documents/UCSF/secure_data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+
+# Import data from Box
+vap_soma_normalized <- read.csv(
+  file.path(secure_data_dir, "vap_soma_normalized.csv"), 
+  stringsAsFactors=F)
+
+JCI_expanded_metadata <- read.csv(
+  file.path(secure_data_dir, "fixed_metadata_10242025.csv"),
+  stringsAsFactors=F)
+
+
+
+# 1.2. Log2 Transformation
+
+
+# Log2 Transformation
+prot_cols <- grepl("^seq_", names(vap_soma_normalized))
+
+vap_soma_normalized[, prot_cols] <- log2(vap_soma_normalized[, prot_cols])
+
+write.csv(vap_soma_normalized, 
+          file.path(secure_data_dir, "vap_soma_normalized_log2.csv"),
+          row.names=F)
+
+
+
+
+
+
+# 1.3. Build data frame with all patients
+
+
+# Include only the 151 patients in both datasets
+patients_vector <- intersect(vap_soma_normalized$patient_id, 
+                             JCI_expanded_metadata$SubjectID)
+
+Prot.Data <- vap_soma_normalized[vap_soma_normalized$patient_id %in% patients_vector, ]
+Meta.Data <- JCI_expanded_metadata[JCI_expanded_metadata$SubjectID %in% patients_vector, ]
+
+# Ensures rows of Meta.Data match those of Prot.Data
+Meta.Data <- Meta.Data[match(Prot.Data$patient_id, Meta.Data$SubjectID), ]
+
+# Produces data frame with patients, age_in_years, sex, and LRTI_Adjudication
+patient_info_ALL <- data.frame(
+  sample_name = Meta.Data$sanitized_name,
+  patient_id = Prot.Data$patient_id,
+  sex = Meta.Data$sex,
+  age_in_years = Meta.Data$age_in_years,
+  LRTI_adjudication = Meta.Data$LRTI_adjudication,
+  stringsAsFactors=F)
+
+write.csv(Meta.Data, 
+          file.path(secure_data_dir, "meta.data.csv"),
+          row.names=F)
+
+write.csv(Prot.Data, 
+          file.path(secure_data_dir, "prot.data.csv"),
+          row.names=F)
+
+write.csv(patient_info_ALL, 
+          file.path(data_dir, "patient_info_ALL.csv"),
+          row.names=F)
+
+
+
+
+
+
+# 1.4. Build protein matrix for all patients
+
+
+# Isolating Protein Matrix (Columns 211:7806 include the 7596 proteins)
+protein_mat_PROBEID <- as.matrix(Prot.Data[, prot_cols])
+
+# Remove "seq_"
+colnames(protein_mat_PROBEID) <- sub("^seq_", "", colnames(protein_mat_PROBEID))
+
+# Replace underscores with hyphens
+colnames(protein_mat_PROBEID) <- gsub("_", "-", colnames(protein_mat_PROBEID))
+
+# Sets rownames to patient_id 
+rownames(protein_mat_PROBEID) <- Prot.Data$patient_id
+
+# Write csv
+write.csv(protein_mat_PROBEID, 
+          file.path(data_dir, "protein_mat_PROBEID.csv"), 
+          row.names=T)
+
+
+
+
+
+
+# 1.5. Safety check
+
+
+sum(duplicated(Meta.Data$SubjectID)) # Should be 0
+
+length(patients_vector) # Should be 151
+
+all(rownames(protein_mat_PROBEID) == patient_info_ALL$patient_id) # Should be TRUE
+
+
+
+
+
+
+```

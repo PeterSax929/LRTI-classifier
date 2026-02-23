@@ -1,0 +1,352 @@
+---
+title: "05-lasso_cv"
+output: html_notebook
+toc: true
+---
+
+```{r}
+#| warning: false
+
+
+
+
+
+
+# 5.1. Ready data for LASSO Workflow
+
+
+library(dplyr)
+library(magrittr)
+library(glmnet)
+library(tibble)
+library(ggplot2)
+
+# Set file paths
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+
+set.seed(8634782)
+
+# Import data
+patient_info_with_folds <- read.csv(
+  file.path(data_dir, "patient_info_with_folds.csv"),
+  stringsAsFactors=F)
+
+protein_mat <- read.csv(
+  file.path(data_dir, "protein_mat.csv"),
+  stringsAsFactors=F, row.names=1, check.names=F)
+
+protein_lookup_table <- read.csv(
+  file.path(data_dir, "protein_lookup_table.csv"),
+  stringsAsFactors=F)
+
+Parameters <- read.csv(
+  file.path(data_dir, "parameters.csv"),
+  stringsAsFactors=F, row.names=1)
+
+# Define nfolds
+nfolds <- as.numeric(Parameters["Folds", "Count"])
+
+# Prepare inputs for LASSO
+X <- as.matrix(protein_mat)  
+y <- patient_info_with_folds$LRTI_adjudication == "Definite"
+
+
+
+
+
+
+# 5.2. LASSO Workflow
+
+
+# Function for a single outer CV fold
+lasso_cv_outer_fold <- function(test_fold) {
+  
+  train <- patient_info_with_folds$fold != test_fold
+  
+ # Fit full lambda path
+fit <- glmnet::glmnet(
+  X[train, ], y[train],
+  family = "binomial",
+  standardize = TRUE
+)
+
+# Count nonzero coefficients at each lambda
+nz <- apply(fit$beta, 2, function(b) sum(b != 0))
+
+
+
+
+
+
+# 5.2a. Select 3 Proteins (OPTION A)
+
+
+# Identify lambda that selects exactly 3 proteins
+#if (any(nz == 3)) {
+  # Choose the largest lambda with exactly 3 
+  #lambda_k3 <- fit$lambda[which(nz == 3)[1]]
+#} else {
+  # Choose lambda with closest >3, then trim to top3
+  #idx <- which.min(abs(nz - 3))
+  #lambda_k3 <- fit$lambda[idx]
+#}
+
+# Predictions at lambda_k3
+#preds <- predict(fit, X[!train, ], type = "response", s = lambda_k3)[, 1] %>%
+  #data.frame(pred = .) %>%
+  #tibble::rownames_to_column("sample_name")
+
+# Extract coefficients at lambda_k3
+#coefs_vec <- coef(fit, s = lambda_k3)[-1, 1]  # remove intercept
+
+# Keep nonzero 
+#nonzero <- coefs_vec[coefs_vec != 0]
+
+#if (length(nonzero) > 3) {
+  #top3 <- sort(abs(nonzero), decreasing = TRUE)[1:3]
+  #nonzero <- nonzero[names(top3)]
+#}
+
+
+
+
+
+
+# 5.2b. Select 1 Protein (OPTION B)
+
+
+# Identify lambda that selects exactly 1 protein
+#if (any(nz == 1)) {
+  # Choose the largest lambda with exactly 1
+  #lambda_k1 <- fit$lambda[which(nz == 1)[1]]
+#} else {
+  # Choose lambda with closest >1, then trim to top1
+  #idx <- which.min(abs(nz - 1))
+  #lambda_k1 <- fit$lambda[idx]
+#}
+
+# Predictions at lambda_k1
+#preds <- predict(fit, X[!train, ], type = "response", s = lambda_k1)[, 1] %>%
+  #data.frame(pred = .) %>%
+  #tibble::rownames_to_column("sample_name")
+
+# Extract coefficients at lambda_k1
+#coefs_vec <- coef(fit, s = lambda_k1)[-1, 1]  # remove intercept
+
+# Keep nonzero 
+#nonzero <- coefs_vec[coefs_vec != 0]
+
+#if (length(nonzero) == 0) {
+  # Find index of current lambda
+  #lam_idx <- which(fit$lambda == lambda_k1)
+  # Move to next less-penalized lambda
+  #if (lam_idx < length(fit$lambda)) {
+    #next_lambda <- fit$lambda[lam_idx + 1]
+    #coefs_next <- coef(fit, s = next_lambda)[-1, 1]
+    # Select strongest coefficient at next lambda
+    #best_name <- names(coefs_next)[which.max(abs(coefs_next))]
+    #nonzero <- coefs_next[best_name]
+  #} else {
+    # Extremely rare: lambda_k1 is already smallest
+    #nonzero <- numeric(0)
+  #}
+#}
+
+#if (length(nonzero) > 1) {
+  #top1 <- sort(abs(nonzero), decreasing = TRUE)[1]
+  #nonzero <- nonzero[names(top1)]
+#}
+
+
+
+
+
+
+# 5.2c. Select lambda based on LASSO CV (OPTION C)
+
+
+# Perform cross validated LASSO to pick optimal lambda
+cv_fit <- cv.glmnet(
+  X[train, ], y[train],
+  family = "binomial",
+  standardize = TRUE,
+  nfolds = nfolds
+)
+
+# Predictions on test fold
+preds <- predict(fit, X[!train, ], type = "response",
+  s = cv_fit$lambda.1se)[, 1] %>%
+  data.frame(pred = .) %>%
+  tibble::rownames_to_column("sample_name")
+
+# Extract coefficients at selected lambda
+coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]  # remove intercept
+
+# Keep nonzero coefficients only
+ nonzero <- coefs_vec[coefs_vec != 0]
+
+
+
+
+
+
+# 5.2d. Build data frame
+
+
+# Build dataframe
+nonzero <- data.frame(
+  protein = names(nonzero),
+  coef = as.numeric(nonzero),
+  fold = test_fold
+)
+
+  list(pred = preds, mod = fit, coef = nonzero) 
+}
+
+
+
+
+
+
+# 5.3. Run LASSO on all folds
+
+
+# Run LASSO across all folds
+lasso_results <- lapply(
+  1:max(patient_info_with_folds$fold), 
+  lasso_cv_outer_fold)
+
+# Combine predictions and coefficients
+lasso_preds <- lasso_results %>%
+  lapply(function(x) x$pred) %>%
+  bind_rows()
+
+lasso_fold_coefs <- lasso_results %>%
+  lapply(function(x) x$coef) %>%
+  bind_rows()
+
+# Merge SYMBOL-based annotations directly
+lasso_fold_coefs <- merge(
+  lasso_fold_coefs,
+  protein_lookup_table,
+  by.x = "protein",
+  by.y = "SYMBOL",
+  all.x = TRUE
+)
+
+# Save outputs
+write.csv(lasso_preds, 
+          file.path(results_dir, "lasso_preds.csv"), 
+          row.names=F)
+
+write.csv(lasso_fold_coefs,
+          file.path(results_dir, "lasso_fold_coefs.csv"),
+          row.names=F)
+
+
+
+
+
+
+# 5.4. Safety Check
+
+
+# Summary
+print(table(lasso_fold_coefs$protein))
+
+all(lasso_fold_coefs$protein %in% 
+      protein_lookup_table$SYMBOL)  # Should return TRUE
+
+nrow(lasso_fold_coefs) 
+
+all(rownames(X) == patient_info_with_folds$patient_id) # Should return TRUE
+
+
+
+
+
+
+# 5.5 Bar Graph
+
+
+prot_freq <- table(lasso_fold_coefs$protein)
+
+prot_df <- as.data.frame(prot_freq)
+
+colnames(prot_df) = c("protein", "fold_freq")
+
+
+
+
+
+
+# 5.5a. Protein frequency plot
+
+
+ggplot(
+  prot_df %>% filter(prot_freq > 1),
+  aes(
+    x = reorder(protein, fold_freq),
+    y = fold_freq
+  )
+) +
+  geom_col(fill = "steelblue", width = 0.7) +
+  scale_y_continuous(breaks = 1:5) +
+  labs(
+    title = "Proteins Selected Across >1 Fold",
+    x = NULL,
+    y = "Number of folds selected"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+
+
+
+
+# 5.5b. Plot top 10 |coefs|
+
+
+top10coefs <- lasso_fold_coefs %>% 
+    slice_max(order_by = abs(lasso_fold_coefs$coef), n=10)
+
+ggplot(
+  top10coefs,
+  aes(
+    x = coef,
+    y = interaction(protein, fold, sep = " | ")
+  )
+) +
+  geom_col(fill = "#d95f02", width = 0.7) +
+  
+  geom_text(
+    aes(label = paste0("Fold ", fold)),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    size = 4) +
+  
+  geom_text(
+  aes(label = round(coef, 3)),
+  hjust = ifelse(top10coefs$coef > 0, -0.1, 1.1),
+  size = 4
+) +
+  
+  scale_x_continuous(
+    limits = c(-1.0, 1.5),
+    breaks = seq(-1.5, 1.5, by = 0.5)
+  ) +
+  scale_y_discrete(limits = sort) +
+  labs(
+    title = "Top 10 Proteins by |coef|",
+    x = "Coefficient",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 14)
+
+
+
+
+
+
+```

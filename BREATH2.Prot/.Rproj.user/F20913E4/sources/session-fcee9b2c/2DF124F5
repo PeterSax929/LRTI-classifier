@@ -1,0 +1,29 @@
+{
+    "id": "2DF124F5",
+    "path": "~/UCSF/BREATH2.Prot/Prot.Classifier.qmd",
+    "project_path": "Prot.Classifier.qmd",
+    "type": "quarto_markdown",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1762881385145.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "3,9",
+        "scrollLine": "0",
+        "ignored_words": "transcriptomic,proteomic,preds,coefs,lookup,SYMBOLs\n",
+        "docOutlineVisible": "0"
+    },
+    "folds": "8|6|132|0|\n137|6|291|0|\n296|6|383|0|\n388|6|491|0|\n496|6|837|0|\n842|6|999|0|\n1004|6|1165|0|\n1170|6|1315|0|\n1320|6|1661|0|\n",
+    "lastKnownWriteTime": 1770349898,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1770349898342,
+    "read_only": false,
+    "read_only_alternatives": []
+}
