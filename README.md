@@ -1,7 +1,7 @@
 
 
 
-# Proteomics LRTI-Classifier
+# Proteomics LRTI-classifier
 
 ## Raw Data
 
