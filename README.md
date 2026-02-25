@@ -1,7 +1,7 @@
 
 
 
-# Proteomics Workflow
+# Proteomics LRTI-Classifier
 
 ## Raw Data
 
