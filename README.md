@@ -3,7 +3,11 @@
 
 # Proteomics Workflow
 
-## Data
+## Raw Data
+
+1. `vap_soma_normalized` contains patient_id (n=151) and SomaScan protein matrix with 7596 PROBEIDs. PHI filtered out to create protein_mat_PROBEID, which is compressed to protein_mat_ALL, which is then subsetted to protein_mat with n=105 patient_ids.
+
+2. `fixed_metadata_10242025` contains metadata for n=261 patients and includes age_in_years, sex, and LRTI_adjudication. PHI filtered out to create patient_info_ALL (n=151), and then subsetted to patient_info (n=105) such that the exact patients match between the metadata and the protein matrix
 
 
 
@@ -32,35 +36,21 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Transcriptomic LRTI-classifier
+
+# Raw Data
+
+1. `vap_soma_normalized` contains patient_id (n=151) and SomaScan protein matrix with 7596 PROBEIDs. Imported to transcriptomic workflow only to identify exact patients used in proteomic workflow such that they match.
+
+2. `fixed_metadata_10242025` contains metadata for n=261 patients and includes age_in_years, sex, and LRTI_adjudication. PHI filtered out and subset to n=151 patient_ids in data frame patient_info_ALL, such that the same patients match between transcriptomic and proteomic workflows.
+
+3. `sample_metadata.csv` contains n=261 patient_ids that are subset to the n=151 patients in patient_info_ALL. The resulting metadata_df_ALL is subset to n=105 patients which include only those of Definite or No Evidence LRTI_adjudication
+
+4. `host_gene_counts` contains gene matrix with n=261 patients and n=36816 genes. Matrix is subsetted to same patients in metadata_df and is transformed and filtered downstream for differentially expressed genes.
+
+5. `microbe_reports_bgfilter.csv` contains background filtered microbe reports for all patient samples. Subset to patients (n=105) in metadata_df, and filtered to only include viral taxa for viral RPM data frame.
+
+
 
 ## Scripts
 
