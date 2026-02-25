@@ -8,19 +8,20 @@ toc: true
 #| warning: false
 
 
-
-
-
-
-# 6.1. Import data
-
-
 library(edgeR)
 library(limma)
 library(dplyr)
 library(tibble)
 library(ggplot2)
 library(ggrepel)
+
+
+
+
+
+
+# 6.1. Import data
+
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 secure_data_dir <- "C:/Users/User/Documents/UCSF/secure_data"
@@ -58,9 +59,9 @@ dge <- DGEList(counts=counts, group=group)
 
 # Apply filtering 
 keep <- rowSums(dge$counts > 10) > 0.2 * ncol(dge$counts)
-dge <- dge[keep,,keep.lib.sizes=FALSE]
+dge <- dge[keep,,keep.lib.sizes=F]
 
-# TMM normalization (standard RNA-seq scaling)
+# TMM normalization 
 dge <- calcNormFactors(dge, method="TMM")
 
 # Check dimensions
@@ -84,7 +85,7 @@ design <- model.matrix(
   data = metadata_df_with_folds)
 
 # Apply voom
-v <- voom(dge, design, plot=TRUE)
+v <- voom(dge, design, plot=T)
 
 # Sanity check
 colnames(design)
@@ -125,7 +126,7 @@ de_results <- as.data.frame(de_results) %>%
 
 # 6.5. Format limma results for volcano plot
 
-# Rename columns to match your previous DESeq2 object
+# Rename columns 
 res_df <- de_results %>%
   dplyr::rename(
     log2FoldChange = logFC,

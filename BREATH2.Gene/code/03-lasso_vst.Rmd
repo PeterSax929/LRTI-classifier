@@ -8,13 +8,6 @@ toc: true
 #| warning: false
 
 
-
-
-
-
-# 3.1. Import host counts & metadata
-
-
 library(dplyr)
 library(magrittr)
 library(DESeq2)
@@ -22,6 +15,14 @@ library(glmnet)
 library(tibble)
 library(ggplot2)
 library(knitr)
+
+
+
+
+
+
+# 3.1. Import host counts & metadata
+
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
@@ -77,12 +78,12 @@ lasso_cv_outer_fold <- function(test_fold) {
 train_idx <- metadata_df_with_folds$fold != test_fold
 
 # Extract training counts
-train_counts <- cv_host_counts[, train_idx, drop = FALSE]
+train_counts <- cv_host_counts[, train_idx, drop=F]
 
 # Build DESeq2 object for training samples only
 dds_train <- DESeq2::DESeqDataSetFromMatrix(
   countData = train_counts,
-  colData = metadata_df_with_folds[train_idx, , drop = FALSE],
+  colData = metadata_df_with_folds[train_idx, , drop=F],
   design = ~1)
 
 # Calculate size factors
@@ -146,7 +147,7 @@ test_idx <- metadata_df_with_folds$fold == test_fold
 test_counts <- cv_host_counts[, test_idx, drop=F]
 
 dds_test <- DESeq2::DESeqDataSetFromMatrix(
-  countData = test_counts[rownames(dds_train), , drop=F],  # ensure same genes as train
+  countData = test_counts[rownames(dds_train), , drop=F],
   colData = metadata_df_with_folds[test_idx, , drop=F],
   design = ~1
 )
@@ -164,6 +165,8 @@ vsd_test_mat <- SummarizedExperiment::assay(vsd_test) %>% round(2)
 
 # Build X_test
 X_test <- t(as.matrix(vsd_test_mat))
+
+
 
 ## Run below for CV lasso
 
@@ -183,7 +186,9 @@ nonzero <- coefs_vec[coefs_vec != 0]
 
 ## Run above for CV lasso
 
-# Predictions for TEST FOLD ONLY (change lambda_k3 or cv_fit$lambda.1se)
+
+
+# Predictions for TEST FOLD ONLY (change lambda_k1/3 or cv_fit$lambda.1se)
 pred_vec <- predict(fit, newx = X_test, type = "response", s = cv_fit$lambda.1se)[, 1]
 
 
@@ -193,7 +198,7 @@ preds <- data.frame(
   pred = pred_vec,
   stringsAsFactors=F)
 
-  # Coefficients at selected lambda (change lambda_k3 or cv_fit$lambda.1se)
+  # Coefficients at selected lambda (change lambda_k1/3 or cv_fit$lambda.1se)
   coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]
 
   nonzero <- coefs_vec[coefs_vec != 0]
@@ -236,6 +241,8 @@ preds <- data.frame(
 #}
 
 ## Comment above for CV lasso  
+  
+  
   
   # Build fold-specific coefficient data frame
   nonzero_df <- data.frame(

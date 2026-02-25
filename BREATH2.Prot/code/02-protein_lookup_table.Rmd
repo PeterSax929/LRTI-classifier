@@ -8,18 +8,19 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(SomaScan.db)
+library(SomaDataIO)
+library(AnnotationDbi)  
+library(tibble)
+
+
 
 
 
 
 # 2.1. Prepare Seq ids
 
-
-library(dplyr)
-library(SomaScan.db)
-library(SomaDataIO)
-library(AnnotationDbi)  
-library(tibble)
 
 # Set file path
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
@@ -47,7 +48,7 @@ protein_lookup_table_ALL <- SomaScan.db::select(
   columns = c("PROBEID", "SYMBOL", "GENENAME", "UNIPROT")
 )
 
-#Remove duplicates
+# Remove duplicates
 protein_lookup_table_ALL <- protein_lookup_table_ALL %>% distinct(PROBEID, .keep_all=T)
 
 

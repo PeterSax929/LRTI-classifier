@@ -8,6 +8,13 @@ toc: true
 #| warning: false
 
 
+library(limma)
+library(ggplot2)
+library(ggrepel)
+library(dplyr)
+library(tibble)
+
+
 
 
 
@@ -15,17 +22,11 @@ toc: true
 # 8.1. Import data
 
 
-library(limma)
-library(ggplot2)
-library(ggrepel)
-library(dplyr)
-library(tibble)
-
 # Set file paths
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
 
-# Import csvs
+# Import data
 metadata_df_with_folds <- read.csv(
   file.path(data_dir, "patient_info_with_folds.csv"),
   stringsAsFactors=F)
@@ -55,7 +56,17 @@ metadata_df_with_folds$LRTI_adjudication <- factor(
   metadata_df_with_folds$LRTI_adjudication,
   levels = c("No Evidence", "Definite"))
 
-design <- model.matrix(~ LRTI_adjudication, data = metadata_df_with_folds)
+# Ensure covariates are correctly formatted
+metadata_df_with_folds$LRTI_adjudication <- factor(
+  metadata_df_with_folds$LRTI_adjudication,
+  levels = c("No Evidence", "Definite"))
+
+metadata_df_with_folds$sex <- factor(metadata_df_with_folds$sex)
+metadata_df_with_folds$age_in_years <- as.numeric(metadata_df_with_folds$age_in_years)
+
+design <- model.matrix(
+  ~ LRTI_adjudication + age_in_years + sex,
+  data = metadata_df_with_folds)
 
 # Fit linear model
 fit <- lmFit(t(protein_mat), design)   # transpose so features = rows
@@ -88,11 +99,11 @@ res_df <- res %>%
 # 8.3a. Plot content
 
 
-# Significance flag first
+# Significance flag
 res_df <- res_df %>%
   mutate(sig = padj < 0.05)
 
-# Then define direction
+# Define direction
 res_df <- res_df %>%
   mutate(direction = case_when(
     sig & log2FoldChange > 0  ~ "Definite",

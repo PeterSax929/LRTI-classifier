@@ -1,0 +1,282 @@
+---
+title: "12-biomarker_concordance_plot"
+output: html_notebook
+toc: true
+---
+
+```{r}
+#| warning: false
+
+
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(ggplot2)
+
+
+
+
+
+
+# 12.1 Import Data
+
+
+metadata_df <- read.csv(
+  file.path(data_dir, "metadata_df.csv"), 
+  stringsAsFactors=F)
+
+# Protein matrix
+protein_mat <- read.csv(
+  file.path("C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv"),
+  stringsAsFactors=F)
+
+# Gene matrix
+full_vsd <- read.csv(
+  file.path(data_dir, "vst_combined_per_fold.csv"),
+  stringsAsFactors=F, check.names=F)
+
+full_vsd <- full_vsd %>%
+ { colnames(.)[1] <- "gene"; . }
+
+# Map ENSG to gene symbols
+ensg2gene <- read.csv(
+  file.path(data_dir, "host_gene_counts.csv"),
+  stringsAsFactors=F) %>%
+  { `names<-`(.$gene_symbol, .$X) }
+
+full_vsd <- full_vsd %>%
+  mutate(
+    gene_symbol = ensg2gene[gene],
+    gene_symbol = ifelse(is.na(gene_symbol), gene, gene_symbol))
+
+
+
+
+
+
+# 12.2 Prepare RNA/Protein concordance for selected genes
+
+
+genes_to_plot <- c("FABP4", "ISG15", "IFIT2", "IFIT3", "APOE", "SLAMF7")
+
+for (selected_gene in genes_to_plot) {
+
+  # RNA: select and scale
+  rna_gene_long <- full_vsd %>%
+    filter(gene_symbol == selected_gene) %>%
+    pivot_longer(
+      cols = -c(gene, gene_symbol),
+      names_to = "sample_name",
+      values_to = "expr"
+    ) %>%
+    mutate(expr_scaled_rna = as.numeric(scale(expr)))
+
+  # Protein: select and scale
+  protein_gene_long <- protein_mat %>%
+    { colnames(.)[1] <- "patient_id"; . } %>%
+    mutate(patient_id = as.character(patient_id)) %>%
+    dplyr::select(patient_id, all_of(selected_gene)) %>%
+    pivot_longer(
+      cols = -patient_id,
+      names_to = "gene_symbol",
+      values_to = "expr"
+    ) %>%
+    mutate(expr_scaled_protein = as.numeric(scale(expr))) 
+
+  # Merge RNA & protein via metadata
+  gene_concordance <- metadata_df %>%
+    mutate(patient_id = as.character(patient_id)) %>%
+    left_join(rna_gene_long, by = "sample_name") %>%
+    left_join(protein_gene_long, by = c("patient_id", "gene_symbol"))
+
+
+
+
+
+
+# 12.3 Scatter plot RNA vs Protein for selected gene
+
+
+  # Spearman
+  spearman_res <- cor.test(
+    gene_concordance$expr_scaled_rna,
+    gene_concordance$expr_scaled_protein,
+    method = "spearman"
+  )
+
+  spearman_rho <- round(spearman_res$estimate, 2)
+  #spearman_p   <- signif(spearman_res$p.value, 3)
+
+  p <- ggplot(gene_concordance, aes(x = expr_scaled_rna, y = expr_scaled_protein)) +
+    geom_point(size = 2, alpha = 0.7, color = "#4C72B0") +
+    geom_smooth(method = "lm", se = T, color = "grey30") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+    theme_classic(base_size = 12) +
+    labs(
+      title = paste(selected_gene, "RNA/Protein Concordance"),
+      subtitle = "Each point = one patient (n=105)",
+      x = "RNA expression (z-score)",
+      y = "Protein expression (z-score)"
+    ) +
+    annotate(
+      "text",
+      x = min(gene_concordance$expr_scaled_rna, na.rm=T),
+      y = max(gene_concordance$expr_scaled_protein, na.rm=T) + 0.2,
+      label = paste0("Spearman ρ = ", spearman_rho),
+      hjust = 0,
+      vjust = 1,
+      size = 4
+    ) +
+    theme(text = element_text(family = "Helvetica")) +
+    coord_cartesian(
+      xlim = c(min(gene_concordance$expr_scaled_rna, na.rm=T) - 0.2,
+               max(gene_concordance$expr_scaled_rna, na.rm=T) + 0.2),
+      ylim = c(min(gene_concordance$expr_scaled_protein, na.rm=T) - 0.2,
+               max(gene_concordance$expr_scaled_protein, na.rm=T) + 0.2)
+    )
+
+  print(p)
+
+  ggsave(
+    file.path(results_dir, paste0(selected_gene, "_RNA_vs_Protein_concordance.png")),
+    plot = p,
+    width = 6,
+    height = 5,
+    dpi = 300
+  )
+
+}
+
+
+
+
+
+
+# 12.4 Scatter plot RNA vs Protein by adjudication
+
+
+for (selected_gene in genes_to_plot) {
+
+  # RNA
+  rna_gene_long <- full_vsd %>%
+    filter(gene_symbol == selected_gene) %>%
+    pivot_longer(
+      cols = -c(gene, gene_symbol),
+      names_to = "sample_name",
+      values_to = "expr"
+    ) %>%
+    mutate(expr_scaled_rna = as.numeric(scale(expr)))
+
+  # Protein
+  protein_gene_long <- protein_mat %>%
+    { colnames(.)[1] <- "patient_id"; . } %>%
+    mutate(patient_id = as.character(patient_id)) %>%
+    dplyr::select(patient_id, all_of(selected_gene)) %>%
+    pivot_longer(
+      cols = -patient_id,
+      names_to = "gene_symbol",
+      values_to = "expr"
+    ) %>%
+    mutate(expr_scaled_protein = as.numeric(scale(expr))) 
+
+  # Merge
+  gene_concordance <- metadata_df %>%
+    mutate(patient_id = as.character(patient_id)) %>%
+    left_join(rna_gene_long, by = "sample_name") %>%
+    left_join(protein_gene_long, by = c("patient_id", "gene_symbol"))
+
+
+
+
+
+
+# 12.5 Scatter plot colored by adjudication
+
+
+  # Spearman per group
+  spearman_definite <- cor.test(
+    gene_concordance$expr_scaled_rna[gene_concordance$LRTI_adjudication == "Definite"],
+    gene_concordance$expr_scaled_protein[gene_concordance$LRTI_adjudication == "Definite"],
+    method = "spearman"
+  )
+
+  spearman_noevidence <- cor.test(
+    gene_concordance$expr_scaled_rna[gene_concordance$LRTI_adjudication == "No Evidence"],
+    gene_concordance$expr_scaled_protein[gene_concordance$LRTI_adjudication == "No Evidence"],
+    method = "spearman"
+  )
+
+  rho_definite  <- round(spearman_definite$estimate, 2)
+  rho_noevidence <- round(spearman_noevidence$estimate, 2)
+
+  label_text <- paste0(
+    "Definite  ρ = ", rho_definite, "\n",
+    "No Evidence  ρ = ", rho_noevidence
+  )
+
+  p <- ggplot(gene_concordance,
+              aes(x = expr_scaled_rna,
+                  y = expr_scaled_protein,
+                  color = LRTI_adjudication)) +
+    geom_point(size = 2, alpha = 0.8) +
+    geom_smooth(method = "lm", se = FALSE) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+    scale_color_manual(values = c(
+      "Definite" = "red",
+      "No Evidence" = "#0072B2"
+    )) +
+    theme_classic(base_size = 12) +
+    labs(
+      title = paste(selected_gene, "RNA/Protein Concordance"),
+      subtitle = "Colored by LRTI adjudication (72 Definite, 33 No Evidence)",
+      x = "RNA expression (z-score)",
+      y = "Protein expression (z-score)",
+      color = "LRTI adjudication"
+    ) +
+    annotate(
+      "text",
+      x = min(gene_concordance$expr_scaled_rna, na.rm = TRUE),
+      y = max(gene_concordance$expr_scaled_protein, na.rm = TRUE),
+      label = label_text,
+      hjust = 0,
+      vjust = 1,
+      size = 3
+    ) +
+    theme(text = element_text(family = "Helvetica")) +
+    coord_cartesian(
+      xlim = c(min(gene_concordance$expr_scaled_rna, na.rm = TRUE) - 0.2,
+               max(gene_concordance$expr_scaled_rna, na.rm = TRUE) + 0.2),
+      ylim = c(min(gene_concordance$expr_scaled_protein, na.rm = TRUE) - 0.2,
+               max(gene_concordance$expr_scaled_protein, na.rm = TRUE) + 0.2)
+    )
+
+  print(p)
+
+  ggsave(
+    file.path(results_dir,
+              paste0(selected_gene,
+                     "_RNA_vs_Protein_concordance_by_adjudication.png")),
+    plot = p,
+    width = 6,
+    height = 5,
+    dpi = 300
+  )
+
+}
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+

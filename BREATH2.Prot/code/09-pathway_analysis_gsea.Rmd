@@ -8,13 +8,6 @@ toc: true
 #| warning: false
 
 
-
-
-
-
-# 9.1. Import data
-
-
 library(clusterProfiler)
 library(msigdbr)
 library(org.Hs.eg.db)
@@ -22,6 +15,14 @@ library(dplyr)
 library(ggplot2)
 library(enrichplot)
 library(stringr)
+
+
+
+
+
+
+# 9.1. Import data
+
 
 # Set file paths
 
@@ -44,7 +45,7 @@ protein_ranks <- res_df$log2FoldChange
 names(protein_ranks) <- res_df$gene
 
 # Sort decreasing 
-protein_ranks <- sort(protein_ranks, decreasing = TRUE)
+protein_ranks <- sort(protein_ranks, decreasing=T)
 
 # protein_ranks is a named numeric vector
 protein_ranks_df <- data.frame(
@@ -55,8 +56,7 @@ protein_ranks_df <- data.frame(
 write.csv(
   protein_ranks_df,
   file.path(results_dir, "protein_ranks_for_RNA_GSEA.csv"),
-  row.names = FALSE
-)
+  row.names=F)
 
 
 
@@ -85,8 +85,7 @@ hallmark_df_prot <- as.data.frame(gsea_hallmark_prot)
 write.csv(
   hallmark_df_prot,
   file.path(results_dir, "GSEA_Hallmark_proteome.csv"),
-  row.names=F
-)
+  row.names=F)
 
 
 
@@ -115,8 +114,7 @@ reactome_df_prot <- as.data.frame(gsea_reactome_prot)
 write.csv(
   reactome_df_prot,
   file.path(results_dir, "GSEA_Reactome_proteome.csv"),
-  row.names = FALSE
-)
+  row.names=F)
 
 
 
@@ -225,58 +223,56 @@ hallmark_plot_prot_df <- gsea_hallmark_prot@result %>%
   filter(p.adjust < 0.05) %>%
   mutate(
     neglogPadj = -log10(p.adjust),
-    Direction = ifelse(NES > 0, "Up", "Down"),
-    # replace underscores and wrap long names
-    Description = str_wrap(gsub("_", " ", Description), width = 40),
+    Direction = ifelse(NES > 0, "Up", "Down")
+  )
+
+# Top 8 Up
+hallmark_top_up_prot <- hallmark_plot_prot_df %>%
+  filter(NES > 0) %>%
+  arrange(desc(NES)) %>%
+  slice_head(n = 8)
+
+# Top 8 Down
+hallmark_top_down_prot <- hallmark_plot_prot_df %>%
+  filter(NES < 0) %>%
+  arrange(NES) %>%
+  slice_head(n = 8)
+
+hallmark_top16_prot <- bind_rows(hallmark_top_up_prot, hallmark_top_down_prot) %>%
+  mutate(
+    Description = gsub("^HALLMARK_", "", Description),
+    Description = gsub("_", " ", Description),
+    Description = str_wrap(Description, width = 20),
     Description = factor(Description, levels = Description[order(NES)])
   )
 
 # Plot
 p_hallmark_all_prot <- ggplot(
-  hallmark_plot_prot_df,
+  hallmark_top16_prot,
   aes(y = Description, x = NES)
 ) +
-  # Center line (NES = 0)
   geom_vline(xintercept = 0, linewidth = 0.8, color = "black") +
-  # Stems
   geom_segment(aes(x = 0, xend = NES, yend = Description), linewidth = 0.7, color = "grey60") +
-  # Points colored by direction
   # Filled points
-geom_point(
-  aes(fill = Direction),
-  shape = 21,
-  size = 4.5,
-  color = NA
-) +
-
-# Black outline
-geom_point(
-  aes(fill = Direction),
-  shape = 21,
-  size = 4.5,
-  color = "black",
-  stroke = 1.4
-) +
-
+  geom_point(aes(fill = Direction), shape = 21, size = 4.5, color = NA) +
+  # Black outline
+  geom_point(aes(fill = Direction), shape = 21, size = 4.5, color = "black", stroke = 1.4) +
   scale_fill_manual(
-  values = c("Up" = "red3", "Down" = "blue3"),
-  breaks = c("Up", "Down"),
-  labels = c(
-    "Up" = "Upregulated in Definite LRTI",
-    "Down" = "Downregulated in Definite LRTI"
-  ),
-  name = NULL
-) +
-
-  # Styling
+    values = c("Up" = "red3", "Down" = "blue3"),
+    breaks = c("Up", "Down"),
+    labels = c(
+      "Up" = "Upregulated in Definite LRTI",
+      "Down" = "Downregulated in Definite LRTI"
+    ),
+    name = NULL
+  ) +
   theme_classic(base_size = 12) +
   theme(
     legend.position = "bottom",
-  legend.direction = "vertical",
-  legend.justification = "left",
-  legend.text = element_text(size = 11),
-  legend.key.width = unit(1.2, "lines"),
-
+    legend.direction = "vertical",
+    legend.justification = "left",
+    legend.text = element_text(size = 11),
+    legend.key.width = unit(1.2, "lines"),
     axis.text.y = element_text(size = 8),
     plot.title.position = "plot",
     plot.title = element_text(hjust = 0.5, face = "bold"),
@@ -285,21 +281,21 @@ geom_point(
   ) +
   labs(
     title = "Hallmark Pathway Enrichment (Protein GSEA)",
-    subtitle = "All significant Hallmark pathways",
+    subtitle = "Top significant Hallmark pathways",
     x = "Normalized Enrichment Score (NES)",
     y = NULL
   ) +
-  xlim(-5, 5)
+  xlim(-1, 4)
 
 # Show plot
 p_hallmark_all_prot
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "GSEA_Hallmark_all_protein.png"),
+  filename = file.path(results_dir, "GSEA_Hallmark_protein.png"),
   plot = p_hallmark_all_prot,
   width = 8,
-  height = 8,  
+  height = 6,  
   dpi = 300
 )
 
@@ -319,67 +315,53 @@ reactome_plot_prot_df <- gsea_reactome_prot@result %>%
     Direction = ifelse(NES > 0, "Up", "Down")
   )
 
-# Top 10 Up
+# Top 8 Up
 reactome_top_up_prot <- reactome_plot_prot_df %>%
   filter(NES > 0) %>%
   arrange(desc(NES)) %>%
-  slice_head(n = 10)
+  slice_head(n = 8)
 
-# Top 10 Down
+# Top 8 Down
 reactome_top_down_prot <- reactome_plot_prot_df %>%
   filter(NES < 0) %>%
   arrange(NES) %>%
-  slice_head(n = 10)
+  slice_head(n = 8)
 
-reactome_top20_prot <- bind_rows(reactome_top_up_prot, reactome_top_down_prot) %>%
+reactome_top16_prot <- bind_rows(reactome_top_up_prot, reactome_top_down_prot) %>%
   mutate(
+    Description = gsub("^REACTOME_", "", Description),
     Description = gsub("_", " ", Description),
     Description = str_wrap(Description, width = 40),
     Description = factor(Description, levels = Description[order(NES)])
   )
 
-# Plot Reactome protein top 20
-p_reactome_top20_prot <- ggplot(
-  reactome_top20_prot,
+# Plot Reactome protein top 16
+p_reactome_top16_prot <- ggplot(
+  reactome_top16_prot,
   aes(y = Description, x = NES)
 ) +
   geom_vline(xintercept = 0, linewidth = 0.8, color = "black") +
   geom_segment(aes(x = 0, xend = NES, yend = Description), linewidth = 0.7, color = "grey60") +
   # Filled points
-geom_point(
-  aes(fill = Direction),
-  shape = 21,
-  size = 4.5,
-  color = NA
-) +
-
-# Black outline
-geom_point(
-  aes(fill = Direction),
-  shape = 21,
-  size = 4.5,
-  color = "black",
-  stroke = 1.4
-) +
-
+  geom_point(aes(fill = Direction), shape = 21, size = 4.5, color = NA) +
+  # Black outline
+  geom_point(aes(fill = Direction), shape = 21, size = 4.5, color = "black", stroke = 1.4) +
   scale_fill_manual(
-  values = c("Up" = "red3", "Down" = "blue3"),
-  breaks = c("Up", "Down"),
-  labels = c(
-    "Up" = "Upregulated in Definite LRTI",
-    "Down" = "Downregulated in Definite LRTI"
-  ),
-  name = NULL
-) +
-
+    values = c("Up" = "red3", "Down" = "blue3"),
+    breaks = c("Up", "Down"),
+    labels = c(
+      "Up" = "Upregulated in Definite LRTI",
+      "Down" = "Downregulated in Definite LRTI"
+    ),
+    name = NULL
+  ) +
   theme_classic(base_size = 12) +
   theme(
     legend.position = "bottom",
-  legend.direction = "vertical",
-  legend.justification = "left",
-  legend.text = element_text(size = 11),
-  legend.key.width = unit(1.2, "lines"),
-
+    legend.direction = "vertical",
+    legend.justification = "left",
+    legend.text = element_text(size = 11),
+    legend.key.width = unit(1.2, "lines"),
     axis.text.y = element_text(size = 7),
     plot.title.position = "plot",
     plot.title = element_text(hjust = 0.5, face = "bold"),
@@ -388,24 +370,23 @@ geom_point(
   ) +
   labs(
     title = "Reactome Pathway Enrichment (Protein GSEA)",
-    subtitle = "Top up and top down pathways",
+    subtitle = "Top Up & Down significant Reactome pathways",
     x = "Normalized Enrichment Score (NES)",
     y = NULL
   ) +
-  xlim(-5, 5)
+  xlim(-3, 4)
 
-# Print plot
-p_reactome_top20_prot
+# Show plot
+p_reactome_top16_prot
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "GSEA_Reactome_top20_protein.png"),
-  plot = p_reactome_top20_prot,
+  filename = file.path(results_dir, "GSEA_Reactome_protein.png"),
+  plot = p_reactome_top16_prot,
   width = 8,
-  height = 8,  
+  height = 6,  
   dpi = 300
 )
-
 
 
 

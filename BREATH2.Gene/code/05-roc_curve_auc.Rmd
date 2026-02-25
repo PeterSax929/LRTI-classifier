@@ -8,16 +8,17 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(magrittr)
+library(pROC)
+
+
 
 
 
 
 # 5.1. Import metadata & preds
 
-
-library(dplyr)
-library(magrittr)
-library(pROC)
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
@@ -35,16 +36,13 @@ lassoRF_preds <- read.csv(
 # Ensure consistent factor levels
 lassoRF_preds$LRTI_adjudication <- factor(
   lassoRF_preds$LRTI_adjudication,
-  levels = c("No Evidence", "Definite")
-)
+  levels = c("No Evidence", "Definite"))
 
 # Merge
 merged_preds <- lassoRF_preds %>%
-  dplyr::inner_join(
-    metadata_df_with_folds %>% 
+  dplyr::inner_join(metadata_df_with_folds %>% 
   dplyr::select(sample_name, fold),
-    by = "sample_name"
-  )
+    by = "sample_name")
 
 
 
@@ -60,7 +58,7 @@ output_auc_roc <- function(preds_df, output_suffix) {
   auc_df <- preds_df %>%
     group_by(fold) %>%
     summarize({
-  roc_obj <- pROC::roc(
+    roc_obj <- pROC::roc(
     response  = factor(LRTI_adjudication, levels = c("No Evidence", "Definite")),
     predictor = pred,
     direction = "<"

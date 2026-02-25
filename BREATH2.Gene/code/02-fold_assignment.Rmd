@@ -8,16 +8,17 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(rsample)
+library(magrittr)
+
+
 
 
 
 
 # 2.1. Import metadata
 
-
-library(dplyr)
-library(rsample)
-library(magrittr)
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 
@@ -62,7 +63,7 @@ while (!folds_ok) {
     strata = "LRTI_adjudication"
   )
 
-  # Add placeholder fold column (will be last column)
+  # Add placeholder fold column
   metadata_df_with_folds <- metadata_df %>%
     mutate(fold = NA_integer_)
 

@@ -8,17 +8,18 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(magrittr)
+library(randomForest)
+library(tibble)
+
+
 
 
 
 
 # 6.1. Import Data for RF
 
-
-library(dplyr)
-library(magrittr)
-library(randomForest)
-library(tibble)
 
 # Set file paths
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"

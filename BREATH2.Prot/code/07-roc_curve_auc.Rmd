@@ -8,16 +8,17 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(magrittr)
+library(pROC)
+
+
 
 
 
 
 # 7.1. Import metadata & preds
 
-
-library(dplyr)
-library(magrittr)
-library(pROC)
 
 # Set file paths
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
@@ -39,7 +40,7 @@ lassoRF_preds$LRTI_adjudication <- factor(
   levels = c("No Evidence", "Definite")
 )
 
-# Merge once so we reuse this everywhere
+# Merge
 merged_preds <- lassoRF_preds %>%
   dplyr::inner_join(
     patient_info_with_folds %>% dplyr::select(patient_id, fold),
@@ -94,9 +95,8 @@ output_auc_roc <- function(preds_df, output_suffix) {
 
   dev.off()
 
-  # Save per-fold AUC CSV at the very end
-  write.csv(
-    auc_df,
+  # Save per-fold AUC CSV
+  write.csv(auc_df,
     file.path(results_dir, paste0("cv_auc_", output_suffix, ".csv")),
     row.names=F)
 

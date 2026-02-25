@@ -8,19 +8,20 @@ toc: true
 #| warning: false
 
 
-
-
-
-
-# 4.1. Import Data for RF
-
-
 library(dplyr)
 library(magrittr)
 library(randomForest)
 library(tibble)
 library(DESeq2)    
 library(SummarizedExperiment)
+
+
+
+
+
+
+# 4.1. Import Data for RF
+
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
@@ -86,11 +87,11 @@ lassoRF_cv_outer_fold <- function(test_fold) {
 X_all <- t(as.matrix(full_vsd))
 
 # Ensure X_all row order matches metadata order
-X_all <- X_all[metadata_df_with_folds$sample_name, , drop = FALSE]
+X_all <- X_all[metadata_df_with_folds$sample_name, , drop=F]
 
 # training / test matrices
-X_train <- X_all[train, keep, drop = FALSE]
-X_test  <- X_all[test, keep, drop = FALSE]
+X_train <- X_all[train, keep, drop=F]
+X_test  <- X_all[test, keep, drop=F]
 
 stopifnot(all(colnames(X_train) %in% selected_lasso_coefs$gene))
 

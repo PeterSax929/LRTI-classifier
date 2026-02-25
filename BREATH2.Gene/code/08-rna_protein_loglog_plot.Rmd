@@ -8,18 +8,19 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggrepel)
+library(tibble)
+
+
 
 
 
 
 # 8.1. Import data
 
-
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(ggrepel)
-library(tibble)
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
@@ -55,7 +56,7 @@ rna_mean <- full_vsd %>%
   ) %>%
   group_by(gene_symbol) %>%
   summarize(
-    mean_rna_vst = mean(expr_vst, na.rm = TRUE),
+    mean_rna_vst = mean(expr_vst, na.rm=T),
     .groups = "drop"
   )
 
@@ -77,9 +78,11 @@ protein_mean <- protein_mat %>%
   ) %>%
   group_by(gene_symbol) %>%
   summarize(
-    mean_protein_log2 = mean(protein_log2, na.rm = TRUE),
+    mean_protein_log2 = mean(protein_log2, na.rm=T),
     .groups = "drop"
   )
+
+
 
 
 
@@ -87,8 +90,8 @@ protein_mean <- protein_mat %>%
 # 8.4. Merge RNA with protein
 
 
-rna_mean <- rna_mean %>% distinct(gene_symbol, .keep_all = TRUE)
-protein_mean <- protein_mean %>% distinct(gene_symbol, .keep_all = TRUE)
+rna_mean <- rna_mean %>% distinct(gene_symbol, .keep_all=T)
+protein_mean <- protein_mean %>% distinct(gene_symbol, .keep_all=T)
 
 loglog_df <- inner_join(
   rna_mean,
@@ -100,7 +103,7 @@ loglog_df <- inner_join(
 label_df <- loglog_df %>%
   mutate(total_abundance = mean_rna_vst + mean_protein_log2) %>%
   arrange(desc(total_abundance)) %>%
-  head(20)   # top 20 most abundant genes
+  head(20)
 
 # Correlation
 cor_spearman <- cor(
@@ -117,34 +120,53 @@ cor_spearman <- cor(
 # 8.5. Log-log abundance plot
 
 
+min_x <- min(loglog_df$mean_rna_vst, na.rm=T)
+
 ggplot(
   loglog_df,
   aes(x = mean_rna_vst, y = mean_protein_log2)
 ) +
   geom_point(alpha = 0.25, size = 1, color = "grey30") +
-  geom_smooth(method = "lm", se = FALSE, color = "firebrick", linewidth = 0.8) +
+  
+  # dashed y = x line
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dashed",
+              color = "grey50") +
+  
+  geom_smooth(method = "lm", se = FALSE,
+              color = "firebrick",
+              linewidth = 0.8) +
+  
   geom_text_repel(
-  data = label_df,
-  aes(label = gene_symbol),
-  size = 3,
-  max.overlaps = 20,
-  box.padding = 0.4,
-  segment.color = "grey70"
-) +
+    data = label_df,
+    aes(label = gene_symbol),
+    size = 3,
+    max.overlaps = 20,
+    box.padding = 0.4,
+    segment.color = "grey70"
+  ) +
+  
+  coord_cartesian(
+    xlim = c(min_x, 18),
+    ylim = c(min_x, 18)
+  ) +
+  
   theme_classic() +
+
   labs(
     x = "Mean RNA expression (VST)",
-    y = "Mean protein abundance (log2)",
+    y = expression("Mean protein abundance (log"[2]*")"),
     title = "RNA–Protein Abundance Relationship",
     subtitle = paste0(
       "Spearman \u03C1 = ", round(cor_spearman, 2),
       " | n = ", nrow(loglog_df)
     )
-  )
-
+  ) 
+  
+  
 ggsave(
   file.path(results_dir, "RNA_protein_loglog_abundance.png"),
-  width = 7,
+  width = 6,
   height = 6
 )
 

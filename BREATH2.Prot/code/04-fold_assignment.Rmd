@@ -8,16 +8,17 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(rsample)
+library(magrittr)
+
+
 
 
 
 
 # 4.1. Import patient info
 
-
-library(dplyr)
-library(rsample)
-library(magrittr)
 
 # Set file paths
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"

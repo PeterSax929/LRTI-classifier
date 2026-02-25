@@ -8,12 +8,6 @@ toc: true
 #| warning: false
 
 
-
-
-
-# 10.1. Import data
-
-
 library(clusterProfiler)
 library(msigdbr)
 library(org.Hs.eg.db)
@@ -21,6 +15,14 @@ library(dplyr)
 library(ggplot2)
 library(stringr)
 library(enrichplot)
+
+
+
+
+
+
+# 10.1. Import data
+
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
@@ -38,7 +40,7 @@ gsea_df <- rna_res %>%
 gene_ranks <- gsea_df$log2FoldChange
 names(gene_ranks) <- gsea_df$gene_symbol
 
-# Sort decreasing (required)
+# Sort decreasing
 gene_ranks <- sort(gene_ranks, decreasing=T)
 
 hallmark_sets <- msigdbr(

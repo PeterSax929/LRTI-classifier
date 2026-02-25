@@ -8,18 +8,19 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(magrittr)
+library(glmnet)
+library(tibble)
+library(ggplot2)
+
+
 
 
 
 
 # 5.1. Ready data for LASSO Workflow
 
-
-library(dplyr)
-library(magrittr)
-library(glmnet)
-library(tibble)
-library(ggplot2)
 
 # Set file paths
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
@@ -148,7 +149,6 @@ nz <- apply(fit$beta, 2, function(b) sum(b != 0))
     #best_name <- names(coefs_next)[which.max(abs(coefs_next))]
     #nonzero <- coefs_next[best_name]
   #} else {
-    # Extremely rare: lambda_k1 is already smallest
     #nonzero <- numeric(0)
   #}
 #}
@@ -194,7 +194,7 @@ coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]  # remove intercept
 # 5.2d. Build data frame
 
 
-# Build dataframe
+# Build data frame
 nonzero <- data.frame(
   protein = names(nonzero),
   coef = as.numeric(nonzero),

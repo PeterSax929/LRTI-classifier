@@ -8,23 +8,36 @@ toc: true
 #| warning: false
 
 
-
-
-
-
-# 11.1. Import data
-
-
 library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(tibble)
 library(msigdbr)
 
-# Import rna norm expr
-rna_norm <- read.csv(
-  file.path(results_dir, "rna_norm.csv"),
-  stringsAsFactors=F)
+
+
+
+
+
+# 11.1. Import data (VST version)
+
+
+# Import full VST matrix
+full_vsd <- read.csv(
+  file.path(data_dir, "vst_combined_per_fold.csv"),
+  stringsAsFactors=F, check.names=F, row.names=1)
+
+# Convert rownames (ENSG) to a column and map to gene symbols
+ensg2gene <- read.csv(
+  file.path(data_dir, "host_gene_counts.csv"),
+  stringsAsFactors=F) %>%
+  { `names<-`(.$gene_symbol, .$X) }
+
+full_vsd <- full_vsd %>%
+  rownames_to_column("gene") %>%
+  mutate(
+    gene_symbol = ensg2gene[gene],
+    gene_symbol = ifelse(is.na(gene_symbol), gene, gene_symbol))
 
 # Import metadata
 metadata_df_with_folds <- read.csv(
@@ -66,13 +79,13 @@ virus_reports <- microbe_reports_bgfilter %>%
 #viral_rpm_df <- virus_reports %>%
   #group_by(sample_name) %>%
   #summarize(
-    #viral_rpm = max(nt_rpm, na.rm = TRUE))
+    #viral_rpm = max(nt_rpm, na.rm=T))
 
 # Run by sum viral rpm
 viral_rpm_df <- virus_reports %>%
   group_by(sample_name) %>%
   summarize(
-    viral_rpm = sum(nt_rpm, na.rm = TRUE))
+    viral_rpm = sum(nt_rpm, na.rm=T))
 
 # Add back all patients (patients with no viral rpm included with 0)
 viral_rpm_df <- metadata_df_with_folds %>%
@@ -96,7 +109,7 @@ write.csv(viral_rpm_df,
 
 ifn_genes <- c("ISG15", "IFIT2", "IFIT3")
 
-rna_ifn_long <- rna_norm %>%
+rna_ifn_long <- full_vsd %>%
   filter(gene_symbol %in% ifn_genes) %>%
   pivot_longer(
     cols = -c(gene, gene_symbol),
@@ -135,7 +148,7 @@ write.csv(
 ifn_proteins <- c("ISG15", "IFIT2", "IFIT3")
 
 protein_ifn_long <- protein_mat %>%
-  rename(patient_id = X) %>%
+  { colnames(.)[1] <- "patient_id"; . } %>%
   mutate(patient_id = as.integer(patient_id)) %>%
   dplyr::select(patient_id, all_of(ifn_proteins)) %>%
   pivot_longer(
@@ -209,6 +222,7 @@ ggplot(
 ) +
   geom_point(alpha = 0.7, size = 1.6) +
   geom_smooth(method = "lm", se = FALSE) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
   geom_text(
   data = cor_ifn_df %>%
     group_by(gene_symbol) %>%
@@ -234,7 +248,7 @@ ggplot(
   theme(
   text = element_text(family = "Helvetica")) +
   labs(
-  x = "log10 Viral RPM (+1)",
+  x = expression(log[10]~"Viral RPM (+1)"),
   y = "Standardized abundance (z-score)",
   title = "Viral Load–Dependent IFN Expression",
   subtitle = "RNA and protein shown separately for each IFN"
@@ -248,6 +262,7 @@ ggsave(
   height = 5,
   dpi = 300
 )
+
 
 
 
@@ -275,10 +290,10 @@ ifn_geneset <- msigdbr(
 # 11.3a. Calculate RNA score
 
 
-hallmark_ifn_genes <- intersect(ifn_geneset, rna_norm$gene_symbol)
+hallmark_ifn_genes <- intersect(ifn_geneset, full_vsd$gene_symbol)
 
 # Build long format RNA table for IFN genes
-rna_ifn_hallmark_long <- rna_norm %>%
+rna_ifn_hallmark_long <- full_vsd %>%
   filter(gene_symbol %in% hallmark_ifn_genes) %>%
   pivot_longer(
     cols = -c(gene, gene_symbol),
@@ -293,7 +308,7 @@ ifn_score_df <- rna_ifn_hallmark_long %>%
   mutate(expr_scaled = scale(expr_log2)) %>%  # scale per gene
   ungroup() %>%
   group_by(sample_name) %>%
-  summarize(IFN_score = mean(expr_scaled, na.rm = TRUE))
+  summarize(IFN_score = mean(expr_scaled, na.rm=T))
 
 summary(ifn_score_df$IFN_score)
 nrow(ifn_score_df)
@@ -322,7 +337,7 @@ ifn_score_plot_df_definite <- ifn_score_plot_df_definite %>%
 
 
 protein_ifn_hallmark_long <- protein_mat %>%
-  rename(patient_id = X) %>%                  
+  { colnames(.)[1] <- "patient_id"; . } %>%                  
   mutate(patient_id = as.integer(patient_id)) %>%
   pivot_longer(
     cols = -patient_id,
@@ -341,7 +356,7 @@ protein_ifn_score_df <- protein_ifn_hallmark_long %>%
   mutate(expr_scaled = scale(expr_log2)) %>%   # scale per protein
   ungroup() %>%
   group_by(sample_name) %>%
-  summarize(IFN_score = mean(expr_scaled, na.rm = TRUE)) %>%
+  summarize(IFN_score = mean(expr_scaled, na.rm=T)) %>%
   mutate(modality = "Protein")
 
 ifn_score_combined_df <- bind_rows(
@@ -384,6 +399,7 @@ ggplot(
 ) +
   geom_point(alpha = 0.7, size = 1.8) +
   geom_smooth(method = "lm", se = TRUE) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
   geom_text(
   data = cor_composite_df %>% 
     mutate(
@@ -407,22 +423,11 @@ ggplot(
   theme(
   text = element_text(family = "Helvetica")) +
   labs(
-    x = "log10 Viral RPM (+1)",
+    x = expression(log[10]~"Viral RPM (+1)"),
     y = "Composite IFN score (z-score)",
     title = "Viral Load vs Composite Interferon Response",
     subtitle = "Hallmark IFNα + IFNγ pathways (RNA and protein)"
   )
-
-  #geom_text(
-    #data = cor_df,
-    #aes(
-      #x = max(log10(ifn_score_combined_df$viral_rpm + 1)), 
-      #y = y_pos,
-      #label = paste0("Spearman \u03C1 = ", round(spearman_r, 3))
-    #),
-    #inherit.aes = FALSE,
-    #hjust = 1.05,
-    #size = 4)
 
 # Save plot
 ggsave(

@@ -8,17 +8,18 @@ toc: true
 #| warning: false
 
 
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(openxlsx)
+
+
 
 
 
 
 # 7.1. Import data
 
-
-library(dplyr)
-library(ggplot2)
-library(ggrepel)
-library(openxlsx)
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
@@ -48,7 +49,7 @@ rna_df <- rna_res %>%
     padj_RNA = padj
   ) %>%
   filter(!is.na(gene_symbol)) %>%
-  distinct(gene_symbol, .keep_all = TRUE)
+  distinct(gene_symbol, .keep_all=T)
 
 # prot df
 prot_df <- prot_res %>%
@@ -58,7 +59,7 @@ prot_df <- prot_res %>%
     padj_protein = padj
   ) %>%
   filter(!is.na(gene_symbol)) %>%
-  distinct(gene_symbol, .keep_all = TRUE)
+  distinct(gene_symbol, .keep_all=T)
 
 # Restrict to genes/proteins in both data frames
 merged_df <- inner_join(rna_df, prot_df, by = "gene_symbol")
@@ -155,6 +156,15 @@ ggplot(
   
   scale_size_identity() +
   
+  geom_smooth(
+  data = merged_df %>% filter(sig_class == "RNA & Protein"),
+  aes(x = log2FC_RNA, y = log2FC_protein),
+  method = "lm",
+  se = F,
+  color = "purple",
+  linewidth = 0.8
+) +
+  
   geom_text_repel(
   data = label_df,
   aes(label = gene_symbol),
@@ -169,10 +179,10 @@ ggplot(
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
   scale_color_manual(values = c(
     "RNA & Protein" = "purple",
-    "RNA only" = "blue",
-    "Protein only" = "red",
-    "Not Significant" = "grey85"
-  )) +
+    "RNA only" = "#4C72B0",
+    "Protein only" = "#55A868",
+    "Not Significant" = "grey85")
+    ) +
   
   theme_classic() +
   theme_minimal(base_size = 12, base_family = "Helvetica") +
@@ -193,7 +203,7 @@ ggplot(
 ggsave(file.path(results_dir, "RNA_protein_LFC_concordance.png"),
   width = 7,
   height = 6
-)
+  )
 
 write.xlsx(merged_df,
            file.path(results_dir, "lfc_rna_protein_concordance.xlsx"))

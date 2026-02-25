@@ -8,13 +8,6 @@ toc: true
 #| warning: false
 
 
-
-
-
-
-# 9.1. Import data
-
-
 library(clusterProfiler)
 library(msigdbr)
 library(org.Hs.eg.db)
@@ -23,6 +16,14 @@ library(ggplot2)
 library(stringr)
 library(tidyr)
 library(enrichplot)
+
+
+
+
+
+
+# 9.1. Import data
+
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
@@ -42,14 +43,14 @@ rna_res <- read.csv(
 # Use gene symbols and log2FC
 gsea_df <- rna_res %>%
   filter(!is.na(gene_symbol)) %>%
-  distinct(gene_symbol, .keep_all = TRUE)
+  distinct(gene_symbol, .keep_all=T)
 
 # Named numeric vector: log2FC, names = gene symbols
 gene_ranks <- gsea_df$log2FoldChange
 names(gene_ranks) <- gsea_df$gene_symbol
 
-# Sort decreasing (required)
-gene_ranks <- sort(gene_ranks, decreasing = TRUE)
+# Sort decreasing
+gene_ranks <- sort(gene_ranks, decreasing=T)
 
 
 
@@ -111,7 +112,7 @@ write.csv(
 
 
 
-# 9.5. Hallmark Pathway Plot
+# 9.5. Hallmark Pathway Plots
 
 
 # View top Hallmark pathways by magnitude of enrichment
@@ -221,18 +222,33 @@ ggsave(
 # 9.7. Hallmark GSEA summary dot plot
 
 
-hallmark_plot_df <- gsea_hallmark@result %>%
+hallmark_res_df <- gsea_hallmark@result %>%
   filter(p.adjust < 0.05) %>%
   mutate(
     neglogPadj = -log10(p.adjust),
-    Direction = ifelse(NES > 0, "Up", "Down"),
-    Description = factor(
-      Description,
-      levels = Description[order(NES)]
-    )
+    Direction = ifelse(NES > 0, "Up", "Down")
   )
 
-p_hallmark_all <- ggplot(
+# Top 8 UP
+hallmark_top_up <- hallmark_res_df %>%
+  filter(NES > 0) %>%
+  arrange(desc(NES)) %>%
+  slice_head(n = 8)
+
+# Top 8 DOWN
+hallmark_top_down <- hallmark_res_df %>%
+  filter(NES < 0) %>%
+  arrange(NES) %>%
+  slice_head(n = 8)
+
+hallmark_plot_df <- bind_rows(hallmark_top_up, hallmark_top_down) %>%
+  mutate(
+    Description = gsub("^HALLMARK_", "", Description),
+    Description = gsub("_", " ", Description),
+    Description = factor(Description, levels = Description[order(NES)])
+  )
+
+p_hallmark_top16 <- ggplot(
   hallmark_plot_df,
   aes(y = Description, x = NES)
 ) +
@@ -247,7 +263,7 @@ p_hallmark_all <- ggplot(
   ) +
 
   # OPTION 1: COLOR BY padj
-  #geom_point(
+    #geom_point(
     #aes(color = neglogPadj),
     #size = 4
   #) +
@@ -257,7 +273,7 @@ p_hallmark_all <- ggplot(
   #) +
 
   # OPTION 2: COLOR BY DIRECTION
-     geom_point(
+    geom_point(
     aes(fill = Direction),
     shape = 21,          # allows fill + outline
     size = 4,
@@ -296,19 +312,20 @@ p_hallmark_all <- ggplot(
   ) +
   labs(
     title = "Hallmark Pathway Enrichment (GSEA)",
-    subtitle = "Transcriptome; pathways ordered by normalized enrichment score",
+    subtitle = 
+    "Transcriptome pathways ordered by normalized enrichment score: Top 8 Up & Top 8 Down",
     x = "Normalized Enrichment Score (NES)",
     y = NULL
   ) +
   xlim(-3, 5)
 
 # Print plot
-p_hallmark_all
+p_hallmark_top16
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "GSEA_Hallmark_all_pathways.png"),
-  plot = p_hallmark_all,
+  filename = file.path(results_dir, "GSEA_Hallmark_pathways.png"),
+  plot = p_hallmark_top16,
   width = 8,
   height = 6,
   dpi = 300
@@ -329,31 +346,32 @@ reactome_plot_df <- gsea_reactome@result %>%
     Direction = ifelse(NES > 0, "Up", "Down")
   )
 
-# Top 10 UP (positive NES)
+# Top 8 UP (positive NES)
 reactome_top_up <- reactome_plot_df %>%
   filter(NES > 0) %>%
   arrange(desc(NES)) %>%
   slice_head(n = 8)  # top 10
 
-# Top 10 DOWN (negative NES)
+# Top 8 DOWN (negative NES)
 reactome_top_down <- reactome_plot_df %>%
   filter(NES < 0) %>%
   arrange(NES) %>%      
   slice_head(n = 8)  # top 10 negative
 
-reactome_top20 <- bind_rows(reactome_top_up, reactome_top_down) %>%
+reactome_top16 <- bind_rows(reactome_top_up, reactome_top_down) %>%
   mutate(
+    Description = gsub("^REACTOME_", "", Description),
     Description = gsub("_", " ", Description),
     Description = str_wrap(Description, width = 40),
     Description = factor(Description, levels = Description[order(NES)])
   )
 
 # Check
-reactome_top20 %>% dplyr::select(Description, NES, neglogPadj, Direction)
+reactome_top16 %>% dplyr::select(Description, NES, neglogPadj, Direction)
 
 # Plot
-p_reactome_top20 <- ggplot(
-  reactome_top20,
+p_reactome_top16 <- ggplot(
+  reactome_top16,
   aes(y = Description, x = NES)
 ) +
   # Center line (NES = 0)
@@ -415,27 +433,26 @@ geom_point(
   ) +
   labs(
     title = "Reactome Pathway Enrichment (GSEA)",
-    subtitle = "Transcriptome; top 8 up and top 8 down pathways",
+    subtitle = "Transcriptome pathways ordered by normalized enrichment score: Top 8 Up & Top 8 Down",
     x = "Normalized Enrichment Score (NES)",
     y = NULL
   ) +
-  xlim(-5, 5)
+  xlim(-3, 5)
 
 # Print plot
-p_reactome_top20
+p_reactome_top16
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "GSEA_Reactome_top20_pathways.png"),
-  plot = p_reactome_top20,
+  filename = file.path(results_dir, "GSEA_Reactome_pathways.png"),
+  plot = p_reactome_top16,
   width = 8,
   height = 8,
   dpi = 300
 )
 
 
-```
-```{r}
+
 
 
 
@@ -451,7 +468,7 @@ protein_ranks <- protein_ranks_df$log2FC
 names(protein_ranks) <- protein_ranks_df$gene
 
 # Re-sort
-protein_ranks <- sort(protein_ranks, decreasing = TRUE)
+protein_ranks <- sort(protein_ranks, decreasing=T)
 
 gsea_hallmark_rna_all <- GSEA(
   geneList     = gene_ranks,
@@ -497,8 +514,7 @@ hallmark_compare_df <- full_join(
   prot_df,
   by = "ID"
 ) %>%
-  mutate(
-    combined_abs_NES = abs(NES_rna) + abs(NES_prot)
+  mutate(combined_abs_NES = abs(NES_rna) + abs(NES_prot)
   )
 
 hallmark_to_plot <- hallmark_compare_df %>%
@@ -541,8 +557,9 @@ plot_df <- hallmark_to_plot %>%
     Significant = padj < 0.05,
 
     # Clean pathway names
-    Description = str_wrap(gsub("_", " ", Description), width = 40)
-  )
+    Description = str_wrap(
+  gsub("_", " ",
+       gsub("^HALLMARK_", "", Description)), width = 40))
 
 omics_colors <- c(
   "RNA" = "#4C72B0",      # muted blue
@@ -588,7 +605,7 @@ p_compare <- ggplot(
       "Protein" = "#55A868",
       "NotSig"  = "white"
     ),
-    guide = "none"   # prevents duplicate legend
+    guide = "none"   
   ) +
 
   scale_color_manual(values = omics_colors) +
@@ -627,4 +644,6 @@ ggsave(
 
 
 
+
 ```
+
