@@ -1,12 +1,11 @@
 ---
 title: "11-viral_rpm_IFNs"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
-
+```{r, warning=F, message=F}
 
 library(dplyr)
 library(ggplot2)
@@ -19,8 +18,12 @@ library(msigdbr)
 
 
 
-# 11.1. Import data (VST version)
+# 11.1. Import data
 
+
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 # Import full VST matrix
 full_vsd <- read.csv(
@@ -29,7 +32,7 @@ full_vsd <- read.csv(
 
 # Convert rownames (ENSG) to a column and map to gene symbols
 ensg2gene <- read.csv(
-  file.path(data_dir, "host_gene_counts.csv"),
+  file.path(raw_data_dir, "host_gene_counts.csv"),
   stringsAsFactors=F) %>%
   { `names<-`(.$gene_symbol, .$X) }
 
@@ -46,7 +49,7 @@ metadata_df_with_folds <- read.csv(
 
 # Import microbe reports
 microbe_reports_bgfilter <- read.csv(
-  file.path(data_dir, "microbe_reports_bgfilter.csv"),
+  file.path(raw_data_dir, "microbe_reports_bgfilter.csv"),
   stringsAsFactors=F)
 
 # Import protein matrix

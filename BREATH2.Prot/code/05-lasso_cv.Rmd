@@ -1,11 +1,11 @@
 ---
 title: "05-lasso_cv"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 library(dplyr)

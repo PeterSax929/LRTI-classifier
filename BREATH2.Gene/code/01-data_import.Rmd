@@ -1,11 +1,11 @@
 ---
 title: "01-data_import"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 library(dplyr)
@@ -21,21 +21,21 @@ library(magrittr)
 
 # Set directories
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-secure_data_dir <- "C:/Users/User/Documents/UCSF/secure_data"
+raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 # Import metadata
 metadata_df_ALL <- read.csv(
-  file.path(data_dir, "sample_metadata.csv"),
+  file.path(raw_data_dir, "sample_metadata.csv"),
   stringsAsFactors=F)
 
 JCI_expanded_metadata <- read.csv(
-  file.path(secure_data_dir, "fixed_metadata_10242025.csv"),
+  file.path(raw_data_dir, "fixed_metadata_10242025.csv"),
   stringsAsFactors=F)
 
 # Import ONLY patient IDs from proteomics file
 protein_patient_ids <- read.csv(
-  file.path(secure_data_dir, "vap_soma_normalized.csv"),
+  file.path(raw_data_dir, "vap_soma_normalized.csv"),
   stringsAsFactors=F) %>%
   dplyr::select(patient_id) %>%
   dplyr::pull(patient_id)

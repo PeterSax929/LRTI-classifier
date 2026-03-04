@@ -1,11 +1,11 @@
 ---
 title: "03-lasso_vst"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 library(dplyr)
@@ -25,6 +25,7 @@ library(knitr)
 
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 set.seed(8634782)
@@ -36,7 +37,7 @@ metadata_df_with_folds <- read.csv(
 
 # Host counts (remove gene_symbol col, rownames = ENSG)
 host_counts <- read.csv(
-  file.path(data_dir, "host_gene_counts.csv"),
+  file.path(raw_data_dir, "host_gene_counts.csv"),
   stringsAsFactors=F, row.names = 1)[, -1]
 
 # Filter to samples used for CV
@@ -52,7 +53,7 @@ nfolds <- as.numeric(Parameters["Folds", "Count"])
 
 # Map ENSG to SYMBOL vector
 ensg2gene <- read.csv(
-  file.path(data_dir, "host_gene_counts.csv"),
+  file.path(raw_data_dir, "host_gene_counts.csv"),
   stringsAsFactors=F) %>%
   { `names<-`(.$gene_symbol, .$X) }
 

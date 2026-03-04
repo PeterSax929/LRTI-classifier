@@ -1,11 +1,11 @@
 ---
 title: "05-roc_curve_auc"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 library(dplyr)

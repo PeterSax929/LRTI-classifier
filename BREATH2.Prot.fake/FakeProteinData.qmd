@@ -1,0 +1,282 @@
+---
+title: "FakeProteinData"
+format: html
+toc: true
+---
+
+# Generate Fake Metadata_df
+
+```{r}
+library(dplyr)
+library(magrittr)
+
+# Set working directory for writing data
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot.fake/data.prot"
+setwd(data_dir)
+
+# Seed spells "BREATH2".. kinda
+set.seed(8634782)
+
+# Sets number of samples 
+n_definite <- 72
+n_noevidence <- 36
+n_total = n_definite + n_noevidence
+
+# Metadata
+sample_name <- paste0("Patient_", 1:n_total)
+LRTI_adjudication <- c(rep("Definite", n_definite), rep("No Evidence", n_noevidence))
+
+# Sex distribution
+sex <- sample(c("Male", "Female"), n_total, replace = TRUE)
+
+# Age distribution
+age_in_years <- rbeta(n_total, shape1=1.5, shape2=5) * 18
+
+# Proteomic data (200 proteins, normal continuous distribution)
+protein_names <- paste0("Protein_", 1:200)
+protein_mat <- matrix(
+  rnorm(n_total * 200,
+        mean = ifelse(rep(LRTI_adjudication, each = 200) == "Definite", 7, 6.5),
+        sd = 0.8),
+  nrow = n_total,
+  ncol = 200,
+  dimnames = list(sample_name, protein_names)
+)
+
+# Combine into data frame
+metadata_df <- data.frame(
+  sample_name = sample_name,
+  sex = sex,
+  age_in_years = age_in_years,
+  LRTI_adjudication = LRTI_adjudication,
+  stringsAsFactors = FALSE
+)
+
+# Save data to metadata data frame and protein matrix
+write.csv(metadata_df, file.path(data_dir, "fake_metadata.csv"), row.names = FALSE)
+write.csv(protein_mat, file.path(data_dir, "fake_protein_matrix.csv"), row.names = TRUE)
+
+#print(head(metadata_df))
+#print(head(protein_mat[,1:5]))
+```
+
+
+
+# Generate Folds
+
+```{r}
+library(dplyr)
+
+setwd(data_dir)
+
+# Import data
+metadata_df <- read.csv("fake_metadata.csv", stringsAsFactors = FALSE)
+
+set.seed(8634782)
+
+folds_ok <- FALSE
+
+while (!folds_ok) {
+  cv_folds <- metadata_df %>%
+    group_by(LRTI_adjudication) %>%
+    mutate(fold = sample(rep(1:5, length.out = n()))) %>%
+    ungroup()
+  
+# Check if each fold has at least 7 "No Evidence" samples
+  counts <- table(cv_folds$fold, cv_folds$LRTI_adjudication)
+  if (all(counts[, "No Evidence"] >= 7)) {
+    folds_ok <- TRUE
+  }
+}
+
+# Save the metadata with folds added
+write.csv(cv_folds, file.path(data_dir, "fake_metadata_with_folds.csv"), row.names = FALSE)
+
+#table(cv_folds$LRTI_adjudication, cv_folds$fold)
+#print(head(cv_folds))
+```
+
+Additional Notes: Minimum of 7 "No Evidence" samples per fold was chosen because ⌊36 / 5 ⌋= 7
+
+
+
+# Run LASSO 
+
+```{r}
+library(dplyr)
+library(magrittr)
+library(glmnet)
+library(tibble)
+
+setwd(data_dir)
+
+set.seed(8634782)
+
+# Import data
+metadata_df <- read.csv(file.path(data_dir, "fake_metadata_with_folds.csv"), stringsAsFactors = FALSE)
+protein_mat <- read.csv(file.path(data_dir, "fake_protein_matrix.csv"), row.names = 1)
+
+# Confirm correct data format for regression variables
+X <- as.matrix(protein_mat)  
+y <- metadata_df$LRTI_adjudication == "Definite"
+
+# Function to extract non-zero values
+lasso_coef_df <- function(mod) {
+  coefs <- coef(mod, s = "lambda.1se")[, 1]
+  
+  # Remove intercept
+  coefs <- coefs[-1]
+  
+  # Identify nonzero coefficients
+  nonzero <- coefs[coefs != 0]
+  
+  # If fewer than 3 proteins selected, pick the top 3 by absolute value
+  if(length(nonzero) < 3){
+    abs_coefs <- abs(coefs)
+    top3 <- sort(abs_coefs, decreasing = TRUE)[1:3]
+    nonzero <- coefs[names(top3)]
+  }
+  
+  # Return as data.frame
+  data.frame(protein = names(nonzero), coef = as.numeric(nonzero))
+}
+
+# Function for a single outer CV fold
+lasso_cv_outer_fold <- function(test_fold) {
+  train <- metadata_df$fold != test_fold
+  foldid <- metadata_df$fold[train]
+  foldid <- as.integer(as.factor(foldid))
+
+  mod <- glmnet::cv.glmnet(
+    X[train, ], y[train],
+    family = "binomial",
+    foldid = foldid
+  )
+
+  # Predictions on test fold
+  preds <- predict(mod, X[!train, ], type = "response", s = "lambda.1se")[, 1] %>%
+    data.frame(pred = .) %>%
+    tibble::rownames_to_column("sample_name")
+
+  # Nonzero coefficients for this fold
+  nonzero <- lasso_coef_df(mod) %>%
+    mutate(fold = test_fold)
+
+  list(pred = preds, mod = mod, coef = nonzero)
+}
+
+# Run LASSO across all folds
+lasso_results <- lapply(1:max(metadata_df$fold), lasso_cv_outer_fold)
+
+# Organize predictions and coefficients
+lasso_preds <- lasso_results %>%
+  lapply(function(x) x$pred) %>%
+  bind_rows()
+
+lasso_features <- lasso_results %>%
+  lapply(function(x) x$coef) %>%
+  bind_rows()
+
+# Save outputs
+write.csv(lasso_preds, file.path(data_dir, "lasso_preds.csv"), row.names = FALSE)
+write.csv(lasso_features, file.path(data_dir, "lasso_fold_coefs.csv"), row.names = FALSE)
+
+# Summary of selected proteins
+message("LASSO complete! Number of times each protein was selected across folds:")
+print(table(lasso_features$protein))
+
+#print(head(lasso_features))
+```
+
+Additional Notes: Fake data with lambda=1 predictably reduces all coefficients to zero. Function sets minimum protein selection of 3 which picks 3 proteins arbitrarily. Real data should behave differently.
+
+
+# Implement Random Forest
+
+```{r}
+library(dplyr)
+library(magrittr)
+library(randomForest)
+library(tibble)
+
+setwd(data_dir)
+
+set.seed(8634782)
+
+# Import data
+metadata_df <- read.csv(file.path(data_dir, "fake_metadata_with_folds.csv"), stringsAsFactors = FALSE)
+protein_mat  <- read.csv(file.path(data_dir, "fake_protein_matrix.csv"), row.names = 1)
+
+# Import selected proteins per fold
+lasso_features <- read.csv(file.path(data_dir, "lasso_fold_coefs.csv"), stringsAsFactors = FALSE)
+
+# Ensure row names match sample names (safety step)
+rownames(protein_mat) <- metadata_df$sample_name
+
+# Outcome variable
+y <- as.factor(metadata_df$LRTI_adjudication)  
+
+# Function to run Random Forest for one outer CV fold
+lassoRF_cv_outer_fold <- function(test_fold) {
+  
+  # Extract proteins selected by LASSO for this fold
+  keep <- lasso_features %>%
+            filter(fold == test_fold) %>%
+            .$protein
+  
+  # Subset protein matrix to selected proteins; rows = samples, columns = selected proteins
+  X <- protein_mat[, keep, drop = FALSE]  
+  
+  # Boolean for training samples
+  train <- metadata_df$fold != test_fold
+  
+  # Fit Random Forest (10000 Trees)
+  rf <- randomForest(X[train, , drop = FALSE], y[train], ntree = 10000)
+  
+  # Predictions on test fold
+  preds <- predict(rf, newdata = X[!train, , drop = FALSE], type = "prob")[, "Definite"]
+  
+  list(test_fold = test_fold, mod = rf, pred = preds)
+}
+
+# Run RF across all folds
+cv_list <- lapply(1:max(metadata_df$fold), lassoRF_cv_outer_fold)
+
+# Collect out-of-fold predictions for all samples
+rf_preds <- cv_list %>%
+  lapply(function(x) {
+    data.frame(
+      sample_name = rownames(protein_mat)[metadata_df$fold == x$test_fold],
+      pred = x$pred
+    )
+  }) %>%
+  bind_rows() %>%
+  left_join(metadata_df %>% select(sample_name, LRTI_adjudication), by = "sample_name") %>%
+  relocate(LRTI_adjudication, .after = sample_name)
+
+# Save RF predictions
+write.csv(rf_preds, file.path(data_dir, "lassoRF_preds.csv"), row.names = FALSE)
+
+# Collect RF votes (training set OOB probabilities)
+rf_votes <- cv_list %>%
+  lapply(function(x) {
+    as.data.frame(x$mod$votes) %>%
+      tibble::rownames_to_column("sample_name") %>%
+      mutate(test_fold = x$test_fold) %>%
+      rename(pred = Definite) %>%
+      select(test_fold, sample_name, pred)
+  }) %>%
+  bind_rows() %>%
+  left_join(metadata_df %>% select(sample_name, LRTI_adjudication), by = "sample_name") %>%
+  relocate(LRTI_adjudication, .after = sample_name)
+
+# Save votes
+write.csv(rf_votes, file.path(data_dir, "lassoRF_votes.csv"), row.names = FALSE)
+
+#print(head(rf_preds))
+#print(head(rf_votes))
+
+message("Random Forest complete! Predictions and votes saved.")
+```
+
+

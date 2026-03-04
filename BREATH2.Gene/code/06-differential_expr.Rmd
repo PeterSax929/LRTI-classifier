@@ -1,11 +1,11 @@
 ---
 title: "06-differential_expr"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 library(edgeR)
@@ -24,7 +24,7 @@ library(ggrepel)
 
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-secure_data_dir <- "C:/Users/User/Documents/UCSF/secure_data"
+raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 metadata_df_with_folds <- read.csv(
@@ -32,7 +32,7 @@ metadata_df_with_folds <- read.csv(
   stringsAsFactors=F)
 
 host_counts <- read.csv(
-  file.path(data_dir, "host_gene_counts.csv"),
+  file.path(raw_data_dir, "host_gene_counts.csv"),
   stringsAsFactors=F, row.names = 1)[, -1]
 
 # Restrict to samples in metadata

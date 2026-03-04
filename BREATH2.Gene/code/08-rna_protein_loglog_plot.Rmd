@@ -1,11 +1,11 @@
 ---
 title: "08-rna_protein_loglog_plot"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 library(dplyr)

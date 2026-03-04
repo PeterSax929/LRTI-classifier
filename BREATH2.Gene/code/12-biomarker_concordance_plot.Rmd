@@ -1,11 +1,11 @@
 ---
 title: "12-biomarker_concordance_plot"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 library(dplyr)
@@ -20,6 +20,10 @@ library(ggplot2)
 
 # 12.1 Import Data
 
+
+data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 metadata_df <- read.csv(
   file.path(data_dir, "metadata_df.csv"), 
@@ -40,7 +44,7 @@ full_vsd <- full_vsd %>%
 
 # Map ENSG to gene symbols
 ensg2gene <- read.csv(
-  file.path(data_dir, "host_gene_counts.csv"),
+  file.path(raw_data_dir, "host_gene_counts.csv"),
   stringsAsFactors=F) %>%
   { `names<-`(.$gene_symbol, .$X) }
 

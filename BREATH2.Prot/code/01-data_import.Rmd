@@ -1,11 +1,11 @@
 ---
 title: "01-data_import"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 
@@ -17,16 +17,16 @@ toc: true
 
 # Set file paths
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
-secure_data_dir <- "C:/Users/User/Documents/UCSF/secure_data"
+raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
 
 # Import data from Box
 vap_soma_normalized <- read.csv(
-  file.path(secure_data_dir, "vap_soma_normalized.csv"), 
+  file.path(raw_data_dir, "vap_soma_normalized.csv"), 
   stringsAsFactors=F)
 
 JCI_expanded_metadata <- read.csv(
-  file.path(secure_data_dir, "fixed_metadata_10242025.csv"),
+  file.path(raw_data_dir, "fixed_metadata_10242025.csv"),
   stringsAsFactors=F)
 
 
@@ -40,7 +40,7 @@ prot_cols <- grepl("^seq_", names(vap_soma_normalized))
 vap_soma_normalized[, prot_cols] <- log2(vap_soma_normalized[, prot_cols])
 
 write.csv(vap_soma_normalized, 
-          file.path(secure_data_dir, "vap_soma_normalized_log2.csv"),
+          file.path(raw_data_dir, "vap_soma_normalized_log2.csv"),
           row.names=F)
 
 
@@ -69,14 +69,6 @@ patient_info_ALL <- data.frame(
   age_in_years = Meta.Data$age_in_years,
   LRTI_adjudication = Meta.Data$LRTI_adjudication,
   stringsAsFactors=F)
-
-write.csv(Meta.Data, 
-          file.path(secure_data_dir, "meta.data.csv"),
-          row.names=F)
-
-write.csv(Prot.Data, 
-          file.path(secure_data_dir, "prot.data.csv"),
-          row.names=F)
 
 write.csv(patient_info_ALL, 
           file.path(data_dir, "patient_info_ALL.csv"),

@@ -1,11 +1,11 @@
 ---
 title: "08-differential_abundance"
-output: html_notebook
-toc: true
+output: 
+  html_notebook:
+    toc: true
 ---
 
-```{r}
-#| warning: false
+```{r, warning=F, message=F}
 
 
 library(limma)
