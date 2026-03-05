@@ -53,11 +53,6 @@ protein_ranks_df <- data.frame(
   log2FC = as.numeric(protein_ranks)
 )
 
-write.csv(
-  protein_ranks_df,
-  file.path(results_dir, "protein_ranks_for_RNA_GSEA.csv"),
-  row.names=F)
-
 
 
 

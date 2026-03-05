@@ -32,6 +32,11 @@ rna_res <- read.csv(
   file.path(results_dir, "DE_limma_results_transcriptome.csv"),
   stringsAsFactors=F)
 
+prot_res <- read.csv(
+  file.path("C:/Users/User/Documents/UCSF/BREATH2.Prot/results/DA_results_proteomics.csv"),
+  stringsAsFactors=F)
+
+
 
 
 
@@ -459,15 +464,11 @@ ggsave(
 # 9.9. RNA vs Protein PA dot plot
 
 
-protein_ranks_df <- read.csv(
-  file.path(
-    "C:/Users/User/Documents/UCSF/BREATH2.Prot/results/protein_ranks_for_RNA_GSEA.csv"),
-  stringsAsFactors=F)
+# Use protein IDs and log2FC
+protein_ranks <- prot_res$log2FoldChange
+names(protein_ranks) <- prot_res$gene
 
-protein_ranks <- protein_ranks_df$log2FC
-names(protein_ranks) <- protein_ranks_df$gene
-
-# Re-sort
+# Sort decreasing 
 protein_ranks <- sort(protein_ranks, decreasing=T)
 
 gsea_hallmark_rna_all <- GSEA(

@@ -26,7 +26,7 @@ raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 metadata_df <- read.csv(
-  file.path(data_dir, "metadata_df.csv"), 
+  file.path(data_dir, "metadata_df_with_folds.csv"), 
   stringsAsFactors=F)
 
 # Protein matrix

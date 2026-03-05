@@ -23,7 +23,6 @@ library(msigdbr)
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 # Import full VST matrix
 full_vsd <- read.csv(
@@ -98,10 +97,6 @@ viral_rpm_df <- metadata_df_with_folds %>%
     viral_rpm = ifelse(is.na(viral_rpm), 0, viral_rpm)
   )
 
-write.csv(viral_rpm_df,
-          file.path(results_dir, "viral_rpm_df.csv"),
-          row.names=F)
-
 
 
 
@@ -134,12 +129,6 @@ ifn_rna_df <- rna_ifn_long %>%
 # Restrict to Definite LRTI only
 ifn_rna_df_definite <- ifn_rna_df %>%
   filter(LRTI_adjudication == "Definite")
-
-write.csv(
-  rna_ifn_long,
-  file.path(results_dir, "IFN_RNA_normalized_long.csv"),
-  row.names=F)
-
 
 
 

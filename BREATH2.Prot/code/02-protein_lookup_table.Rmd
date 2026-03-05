@@ -25,9 +25,9 @@ library(tibble)
 # Set file path
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
 
-protein_mat_PROBEID <- read.csv(
-  file.path(data_dir, "protein_mat_PROBEID.csv"), 
-  stringsAsFactors=F, check.names=F)
+#protein_mat_PROBEID <- read.csv(
+  #file.path(data_dir, "protein_mat_PROBEID.csv"), 
+  #  stringsAsFactors=F, check.names=F)
 
 # Extracts all PROBEIDs in protein_mat_ALL
 seq_ids <- colnames(protein_mat_PROBEID)
@@ -69,11 +69,6 @@ valid_ids <- keys(SomaScan.db, keytype = "PROBEID")
 
 # Find unmapped probes
 unmapped_probes <- setdiff(seq_ids, valid_ids)
-
-# Write csv
-write.csv(data.frame(PROBEID = unmapped_probes), 
-          file.path(data_dir, "unmapped_probes.csv"), 
-          row.names=F)
 
 
 
@@ -127,13 +122,13 @@ protein_lookup_table <- protein_lookup_table[match(colnames(protein_mat_ALL),
                                                    protein_lookup_table$SYMBOL), ]
 
 # Write csvs
-write.csv(protein_lookup_table, 
-          file.path(data_dir, "protein_lookup_table.csv"),
-          row.names=F)
+#write.csv(protein_lookup_table, 
+          #file.path(data_dir, "protein_lookup_table.csv"),
+          #row.names=F)
 
-write.csv(protein_mat_ALL, 
-          file.path(data_dir, "protein_mat_ALL.csv"), 
-          row.names=T)
+#write.csv(protein_mat_ALL, 
+          #file.path(data_dir, "protein_mat_ALL.csv"), 
+          #row.names=T)
 
 
 

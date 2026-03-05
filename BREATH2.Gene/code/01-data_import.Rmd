@@ -22,7 +22,6 @@ library(magrittr)
 # Set directories
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 # Import metadata
 metadata_df_ALL <- read.csv(
@@ -80,12 +79,6 @@ metadata_df <- metadata_df_ALL %>%
   ) %>%
   relocate(patient_id, .after = sample_name)
 
-# Write clean metadata file
-write.csv(
-  metadata_df,
-  file.path(data_dir, "metadata_df.csv"),
-  row.names=F)
-
 
 
 
@@ -105,11 +98,6 @@ ntrees <- 10000
 Parameters <- data.frame(c(npatients, Definite, No_Evidence, nfolds, ntrees))
 row.names(Parameters) <- c("Patients", "Definite", "No Evidence", "Folds", "RF Trees")
 colnames(Parameters) <- "Count"
-
-write.csv(
-  Parameters,
-  file.path(data_dir, "parameters.csv"),
-  row.names=T)
 
 
 

@@ -37,10 +37,6 @@ full_vsd <- read.csv(
   file.path(data_dir, "vst_combined_per_fold.csv"),
   stringsAsFactors=F, row.names=1)
 
-Parameters <- read.csv(
-  file.path(data_dir, "parameters.csv"),
-  stringsAsFactors=F, row.names=1)
-
 # Define ntrees 
 ntrees <- as.numeric(Parameters["RF Trees", "Count"])
 
@@ -159,11 +155,6 @@ rf_votes <- cv_list %>%
     by = "sample_name"
   ) %>%
   dplyr::relocate(LRTI_adjudication, .after = sample_name)
-
-# Save votes
-write.csv(rf_votes, 
-          file.path(results_dir, "lassoRF_votes.csv"),
-          row.names=F)
 
 
 

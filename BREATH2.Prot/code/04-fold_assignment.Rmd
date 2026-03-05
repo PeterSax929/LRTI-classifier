@@ -24,13 +24,13 @@ library(magrittr)
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
 
 # Read csvs
-patient_info <- read.csv(
-  file.path(data_dir, "patient_info.csv"), 
-  stringsAsFactors=F)
+#patient_info <- read.csv(
+  #file.path(data_dir, "patient_info.csv"), 
+  #stringsAsFactors=F)
 
-Parameters <- read.csv(
-  file.path(data_dir, "parameters.csv"),
-  stringsAsFactors=F, row.names=1)
+#Parameters <- read.csv(
+  #file.path(data_dir, "parameters.csv"),
+  #stringsAsFactors=F, row.names=1)
 
 # Define number of folds
 nfolds <- as.numeric(Parameters["Folds", "Count"])

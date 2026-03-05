@@ -24,7 +24,6 @@ library(enrichplot)
 # 10.1. Import data
 
 
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 rna_res <- read.csv(

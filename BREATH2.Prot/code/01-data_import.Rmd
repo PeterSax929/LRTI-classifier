@@ -39,10 +39,6 @@ prot_cols <- grepl("^seq_", names(vap_soma_normalized))
 
 vap_soma_normalized[, prot_cols] <- log2(vap_soma_normalized[, prot_cols])
 
-write.csv(vap_soma_normalized, 
-          file.path(raw_data_dir, "vap_soma_normalized_log2.csv"),
-          row.names=F)
-
 
 
 
@@ -70,9 +66,9 @@ patient_info_ALL <- data.frame(
   LRTI_adjudication = Meta.Data$LRTI_adjudication,
   stringsAsFactors=F)
 
-write.csv(patient_info_ALL, 
-          file.path(data_dir, "patient_info_ALL.csv"),
-          row.names=F)
+#write.csv(patient_info_ALL, 
+          #file.path(data_dir, "patient_info_ALL.csv"),
+          #row.names=F)
 
 
 
@@ -95,9 +91,9 @@ colnames(protein_mat_PROBEID) <- gsub("_", "-", colnames(protein_mat_PROBEID))
 rownames(protein_mat_PROBEID) <- Prot.Data$patient_id
 
 # Write csv
-write.csv(protein_mat_PROBEID, 
-          file.path(data_dir, "protein_mat_PROBEID.csv"), 
-          row.names=T)
+#write.csv(protein_mat_PROBEID, 
+          #file.path(data_dir, "protein_mat_PROBEID.csv"), 
+          #row.names=T)
 
 
 

@@ -43,11 +43,6 @@ host_counts <- read.csv(
 # Filter to samples used for CV
 cv_host_counts <- host_counts[, metadata_df_with_folds$sample_name, drop=F]
 
-# Import parameters
-Parameters <- read.csv(
-  file.path(data_dir, "parameters.csv"),
-  stringsAsFactors=F, row.names=1)
-
 # Call number of folds
 nfolds <- as.numeric(Parameters["Folds", "Count"])
 
@@ -299,12 +294,6 @@ lasso_preds <- lasso_results %>%
 lasso_fold_coefs <- lasso_results %>%
   lapply(function(x) x$coef) %>%
   bind_rows()
-
-# Save outputs
-write.csv(
-  lasso_preds,
-  file.path(results_dir, "lasso_preds.csv"),
-  row.names=F)
 
 write.csv(
   lasso_fold_coefs,

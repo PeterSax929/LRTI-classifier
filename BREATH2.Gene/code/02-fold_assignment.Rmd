@@ -22,15 +22,6 @@ library(magrittr)
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 
-# Read csvs
-metadata_df <- read.csv(
-  file.path(data_dir, "metadata_df.csv"), 
-  stringsAsFactors=F)
-
-Parameters <- read.csv(
-  file.path(data_dir, "parameters.csv"),
-  stringsAsFactors=F, row.names=1)
-
 # Number of folds
 nfolds <- as.numeric(Parameters["Folds", "Count"])
 

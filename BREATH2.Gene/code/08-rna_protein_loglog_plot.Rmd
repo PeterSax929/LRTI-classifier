@@ -23,7 +23,6 @@ library(tibble)
 
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 # RNA vst matrix (genes x samples)
 full_vsd <- read.csv(
