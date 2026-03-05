@@ -16,9 +16,7 @@ output:
 
 
 # Set file paths
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
 raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
 
 # Import data from Box
 vap_soma_normalized <- read.csv(
@@ -66,11 +64,6 @@ patient_info_ALL <- data.frame(
   LRTI_adjudication = Meta.Data$LRTI_adjudication,
   stringsAsFactors=F)
 
-#write.csv(patient_info_ALL, 
-          #file.path(data_dir, "patient_info_ALL.csv"),
-          #row.names=F)
-
-
 
 
 
@@ -89,11 +82,6 @@ colnames(protein_mat_PROBEID) <- gsub("_", "-", colnames(protein_mat_PROBEID))
 
 # Sets rownames to patient_id 
 rownames(protein_mat_PROBEID) <- Prot.Data$patient_id
-
-# Write csv
-#write.csv(protein_mat_PROBEID, 
-          #file.path(data_dir, "protein_mat_PROBEID.csv"), 
-          #row.names=T)
 
 
 

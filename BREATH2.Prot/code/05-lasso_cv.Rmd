@@ -37,14 +37,6 @@ protein_mat <- read.csv(
   file.path(data_dir, "protein_mat.csv"),
   stringsAsFactors=F, row.names=1, check.names=F)
 
-#protein_lookup_table <- read.csv(
-  #file.path(data_dir, "protein_lookup_table.csv"),
-  #stringsAsFactors=F)
-
-#Parameters <- read.csv(
-  #file.path(data_dir, "parameters.csv"),
-  #stringsAsFactors=F, row.names=1)
-
 # Define nfolds
 nfolds <- as.numeric(Parameters["Folds", "Count"])
 
@@ -236,10 +228,6 @@ lasso_fold_coefs <- merge(
 )
 
 # Save outputs
-#write.csv(lasso_preds, 
-          #file.path(results_dir, "lasso_preds.csv"), 
-          #row.names=F)
-
 write.csv(lasso_fold_coefs,
           file.path(results_dir, "lasso_fold_coefs.csv"),
           row.names=F)

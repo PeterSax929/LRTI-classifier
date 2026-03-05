@@ -18,15 +18,6 @@ output:
 # Set file paths
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
 
-# Read csvs
-#protein_lookup_table <- read.csv( 
-          #file.path(data_dir, "protein_lookup_table.csv"),
-          #stringsAsFactors=F)
-
-#protein_mat_ALL <- read.csv( 
-          #file.path(data_dir, "protein_mat_ALL.csv"), 
-          #stringsAsFactors=F, row.names=1)
-
 # Include only Definite and No Evidence patients
 patient_info <- patient_info_ALL[patient_info_ALL$LRTI_adjudication %in% 
                                      c("Definite", "No Evidence"), ]
@@ -34,11 +25,6 @@ patient_info <- patient_info_ALL[patient_info_ALL$LRTI_adjudication %in%
 # Includes only the protein matrix for Definite and No Evidence patients
 protein_mat <- protein_mat_ALL[match(patient_info$patient_id, 
                                        rownames(protein_mat_ALL)), ]
-
-# Save outputs
-#write.csv(patient_info, 
-          #file.path(data_dir, "patient_info.csv"),
-          #row.names=F)
 
 write.csv(protein_mat,
           file.path(data_dir, "protein_mat.csv"),
@@ -64,11 +50,6 @@ ntrees <- 10000
 Parameters <- data.frame(c(npatients, Definite, No_Evidence, nproteins, nfolds, ntrees))
 row.names(Parameters) = c("Patients", "Definite", "No Evidence", "Proteins", "Folds", "RF Trees")
 colnames(Parameters) = "Count"
-
-# Write csv
-#write.csv(Parameters, 
-          #file.path(data_dir, "parameters.csv"),
-          #row.names=T)
 
 print(Parameters)
 

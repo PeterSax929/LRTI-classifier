@@ -36,10 +36,6 @@ protein_mat <- read.csv(
   file.path(data_dir, "protein_mat.csv"), 
   stringsAsFactors=F, row.names=1, check.names=F)
 
-#Parameters <- read.csv(
-  #file.path(data_dir, "parameters.csv"),
-  #stringsAsFactors=F, row.names=1)
-
 # Define ntrees 
 ntrees <- as.numeric(Parameters["RF Trees", "Count"])
 
@@ -140,11 +136,6 @@ rf_votes <- cv_list %>%
   dplyr::left_join(dplyr::select(patient_info_with_folds, patient_id, LRTI_adjudication), 
             by = "patient_id") %>%
   dplyr::relocate(LRTI_adjudication, .after = patient_id)
-
-# Save votes
-#write.csv(rf_votes, 
-          #file.path(results_dir, "lassoRF_votes.csv"),
-          #row.names=F)
 
 
 
