@@ -5,7 +5,7 @@ output:
     toc: true
 ---
 
-```{r, warning=F, message=F}
+```{r, warning=F}
 
 
 library(dplyr)
@@ -68,8 +68,8 @@ output_auc_roc <- function(preds_df, output_suffix) {
     auc = as.numeric(roc_obj$auc),
     auc_lower = ci_vals[1],
     auc_upper = ci_vals[3]
-  )
-}, .groups = "drop")
+    )
+  }, .groups = "drop")
 
   # Determine number of folds
   max_fold <- max(auc_df$fold)
@@ -81,7 +81,8 @@ output_auc_roc <- function(preds_df, output_suffix) {
     fold_data <- preds_df %>% filter(fold == i)
 
     roc_obj <- pROC::roc(
-      response  = factor(fold_data$LRTI_adjudication, levels = c("No Evidence", "Definite")),
+      response  = factor(fold_data$LRTI_adjudication,
+        levels = c("No Evidence", "Definite")),
       predictor = fold_data$pred,
       direction = "<"
     )
@@ -126,7 +127,8 @@ for (i in 1:max_fold) {
   fold_data <- merged_preds %>% filter(fold == i)
 
   roc_obj <- pROC::roc(
-    response  = factor(fold_data$LRTI_adjudication, levels = c("No Evidence", "Definite")),
+    response  = factor(fold_data$LRTI_adjudication,
+      levels = c("No Evidence", "Definite")),
     predictor = fold_data$pred,
     direction = "<"
   )
@@ -159,6 +161,20 @@ ci_auc <- pROC::ci.auc(
 message("Lower AUC: ", round(ci_auc[1], 3))
 message("Mean AUC: ", round(as.numeric(ci_auc[2]), 3))
 message("Upper AUC: ", round(ci_auc[3], 3))
+
+mean_auc <- as.numeric(ci_auc[2])
+lower_auc <- ci_auc[1]
+upper_auc <- ci_auc[3]
+
+message(
+  "AUC summary: ",
+  round(mean_auc, 3),
+  " (95% CI: ",
+  round(lower_auc, 3),
+  "–",
+  round(upper_auc, 3),
+  ")"
+)
 
 print(auc_lassoRF)
 

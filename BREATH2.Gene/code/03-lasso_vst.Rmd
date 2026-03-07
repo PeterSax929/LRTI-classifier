@@ -70,34 +70,34 @@ lasso_cv_outer_fold <- function(test_fold) {
 # 3.2a. VST training samples ONLY
   
 
-# Identify train/test samples
-train_idx <- metadata_df_with_folds$fold != test_fold
+  # Identify train/test samples
+  train_idx <- metadata_df_with_folds$fold != test_fold
 
-# Extract training counts
-train_counts <- cv_host_counts[, train_idx, drop=F]
+  # Extract training counts
+  train_counts <- cv_host_counts[, train_idx, drop=F]
 
-# Build DESeq2 object for training samples only
-dds_train <- DESeq2::DESeqDataSetFromMatrix(
-  countData = train_counts,
-  colData = metadata_df_with_folds[train_idx, , drop=F],
-  design = ~1)
+  # Build DESeq2 object for training samples only
+  dds_train <- DESeq2::DESeqDataSetFromMatrix(
+    countData = train_counts,
+    colData = metadata_df_with_folds[train_idx, , drop=F],
+    design = ~1)
 
-# Calculate size factors
-dds_train <- DESeq2::estimateSizeFactors(dds_train)
+  # Calculate size factors
+  dds_train <- DESeq2::estimateSizeFactors(dds_train)
 
-dds_train <- DESeq2::estimateDispersions(dds_train)
+  dds_train <- DESeq2::estimateDispersions(dds_train)
 
-# Apply VST to training samples only
-vsd_train <- DESeq2::varianceStabilizingTransformation(dds_train, 
-                                                       blind=F, 
-                                                       fitType="parametric")
+  # Apply VST to training samples only
+  vsd_train <- DESeq2::varianceStabilizingTransformation(dds_train, 
+    blind=F, fitType="parametric")
 
-# Extract VST matrix
-vsd_train_mat <- SummarizedExperiment::assay(vsd_train) %>% round(2)
+  # Extract VST matrix
+  vsd_train_mat <- SummarizedExperiment::assay(vsd_train) %>% round(2)
 
-# Create training X and y
-X_train <- t(as.matrix(vsd_train_mat))            # training samples x genes
-y_train <- (metadata_df_with_folds$LRTI_adjudication[train_idx] == "Definite")
+  # Create training X and y
+  X_train <- t(as.matrix(vsd_train_mat))            
+  # training samples x genes
+  y_train <- (metadata_df_with_folds$LRTI_adjudication[train_idx] == "Definite")
 
   
   
@@ -112,87 +112,71 @@ y_train <- (metadata_df_with_folds$LRTI_adjudication[train_idx] == "Definite")
     X_train, y_train,
     family = "binomial",
     standardize = TRUE)
-
-  # Count nonzero genes at each lambda
-  nz <- apply(fit$beta, 2, function(b) sum(b != 0))
   
-## Comment below for CV lasso
 
-  # Lambda that selects exactly 3 genes
-  #if (any(nz == 3)) {
-    #lambda_k3 <- fit$lambda[which(nz == 3)[1]]   # largest lambda w/ 3 nonzero
-  #} else {
-    #idx <- which.min(abs(nz - 3))
-    #lambda_k3 <- fit$lambda[idx]
-  #}
-
-## Comment above for CV lasso  
   
   
   
 
-
-  
 # 3.2c. Build VST on TEST samples ONLY
   
   
-# Identify test samples  
-test_idx <- metadata_df_with_folds$fold == test_fold
+  # Identify test samples  
+  test_idx <- metadata_df_with_folds$fold == test_fold
 
-# Extract test counts
-test_counts <- cv_host_counts[, test_idx, drop=F]
+  # Extract test counts
+  test_counts <- cv_host_counts[, test_idx, drop=F]
 
-dds_test <- DESeq2::DESeqDataSetFromMatrix(
-  countData = test_counts[rownames(dds_train), , drop=F],
-  colData = metadata_df_with_folds[test_idx, , drop=F],
-  design = ~1
-)
+  dds_test <- DESeq2::DESeqDataSetFromMatrix(
+    countData = test_counts[rownames(dds_train), , drop=F],
+    colData = metadata_df_with_folds[test_idx, , drop=F],
+    design = ~1
+  )
 
-dds_test <- estimateSizeFactors(dds_test)
+  dds_test <- estimateSizeFactors(dds_test)
 
-dispersionFunction(dds_test) <- dispersionFunction(dds_train)
+  dispersionFunction(dds_test) <- dispersionFunction(dds_train)
 
-# Apply frozen VST
-vsd_test <- DESeq2::varianceStabilizingTransformation(dds_test, blind=F,
-                                                      fitType="parametric")
+  # Apply frozen VST
+  vsd_test <- DESeq2::varianceStabilizingTransformation(dds_test,
+    blind=F, fitType="parametric")
 
-# Extract VST matrix
-vsd_test_mat <- SummarizedExperiment::assay(vsd_test) %>% round(2)
+  # Extract VST matrix
+  vsd_test_mat <- SummarizedExperiment::assay(vsd_test) %>% round(2)
 
-# Build X_test
-X_test <- t(as.matrix(vsd_test_mat))
-
-
-
-## Run below for CV lasso
-
-# Cross-validated LASSO on training data
-cv_fit <- cv.glmnet(
-  X_train, y_train,
-  family = "binomial",
-  standardize = TRUE,
-  nfolds = nfolds
-)
-
-# Extract coefficients at lambda.1se
-coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]
-
-# Keep only nonzero coefficients
-nonzero <- coefs_vec[coefs_vec != 0]
-
-## Run above for CV lasso
+  # Build X_test
+  X_test <- t(as.matrix(vsd_test_mat))
 
 
 
-# Predictions for TEST FOLD ONLY (change lambda_k1/3 or cv_fit$lambda.1se)
-pred_vec <- predict(fit, newx = X_test, type = "response", s = cv_fit$lambda.1se)[, 1]
+
+  # Cross-validated LASSO on training data
+  cv_fit <- cv.glmnet(
+    X_train, y_train,
+    family = "binomial",
+    standardize = TRUE,
+    nfolds = nfolds
+  )
+
+  # Extract coefficients at lambda.1se
+  coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]
+
+  # Keep only nonzero coefficients
+  nonzero <- coefs_vec[coefs_vec != 0]
 
 
-# Build prediction data frame
-preds <- data.frame(
-  sample_name = colnames(test_counts),
-  pred = pred_vec,
-  stringsAsFactors=F)
+
+
+  # Predictions for TEST FOLD ONLY (change lambda_k1/3 or cv_fit$lambda.1se)
+  pred_vec <- predict(
+    fit, newx = X_test, type = "response", s = cv_fit$lambda.1se)[, 1]
+
+
+  # Build prediction data frame
+  preds <- data.frame(
+    sample_name = colnames(test_counts),
+    pred = pred_vec,
+    stringsAsFactors=F)
 
   # Coefficients at selected lambda (change lambda_k1/3 or cv_fit$lambda.1se)
   coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]
@@ -207,50 +191,15 @@ preds <- data.frame(
 # 3.2d. Ensure structure and build data frame
   
   
-## Comment below for CV lasso  
-  
-  # Ensure at least 3 genes per fold
-  #if (length(nonzero) < 3) {
-    
-  # Find all lambdas that select >= 3 nonzero genes
-  #lambda_idx_candidates <- which(nz >= 3)
-  #f (length(lambda_idx_candidates) == 0) {
-    
-    # If no lambda has >=3, pick lambda with closest >3 
-    #idx <- which.min(abs(nz - 3))
-    #lambda_k3 <- fit$lambda[idx]
-  #} else {
-    
-    # Pick the largest lambda that yields at least 3 nonzero
-    #lambda_k3 <- fit$lambda[lambda_idx_candidates[1]]
-  #}
-  
-  # Extract coefficients at the new lambda
-  #coefs_vec <- coef(fit, s = lambda_k3)[-1, 1]
-  #nonzero <- coefs_vec[coefs_vec != 0]
-  
-  # If still >3, keep top 3 by absolute value
-  #if (length(nonzero) > 3) {
-    #top3 <- sort(abs(nonzero), decreasing = TRUE)[1]
-    #nonzero <- nonzero[names(top3)]
-  #}
-#}
-
-## Comment above for CV lasso  
-  
-  
-  
   # Build fold-specific coefficient data frame
   nonzero_df <- data.frame(
     gene = names(nonzero),
     coef = as.numeric(nonzero),
     gene_symbol = ensg2gene[names(nonzero)],
     fold = test_fold, 
-    stringsAsFactors=F
-  )
+    stringsAsFactors=F)
   
-  # Combine samples
-  vsd_combined <- cbind(vsd_train_mat, vsd_test_mat)
+  vsd_combined <- vsd_test_mat
 
   list(
     pred = preds,
@@ -337,12 +286,11 @@ colnames(gene_df) = c("gene_symbol", "fold_freq")
 
 # Plot gene frequencies
 ggplot(
-  gene_df %>% filter(gene_freq > 1),
+  gene_df %>% filter(fold_freq > 1),
   aes(
     x = reorder(gene_symbol, fold_freq),
-    y = fold_freq
-  )
-) +
+    y = fold_freq)
+  ) +
   geom_col(fill = "steelblue", width = 0.7) +
   scale_y_continuous(breaks = 1:5) +
   labs(
@@ -368,17 +316,14 @@ ggplot(
   top10coefs,
   aes(
     x = coef,
-    y = interaction(gene_symbol, fold, sep = " | ")
-  )
-) +
+    y = interaction(gene_symbol, fold, sep = " | "))
+  ) +
   geom_col(fill = "#d95f02", width = 0.7) +
-  
   geom_text(
   aes(label = round(coef, 3)),
   hjust = ifelse(top10coefs$coef > 0, -0.1, 1.1),
   size = 4
-) +
-  
+  ) +
   scale_x_continuous(
     limits = c(-1.5, 1.5),
     breaks = seq(-1.5, 1.5, by = 0.5)

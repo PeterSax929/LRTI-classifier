@@ -149,7 +149,7 @@ label_df <- merged_df %>%
 ggplot(
   merged_df,
   aes(x = log2FC_RNA, y = log2FC_protein, color = sig_class)
-) +
+  ) +
   
   geom_point(aes(size = point_size), alpha = 0.6) +
   
@@ -162,7 +162,7 @@ ggplot(
   se = F,
   color = "purple",
   linewidth = 0.8
-) +
+  ) +
   
   geom_text_repel(
   data = label_df,
@@ -172,7 +172,7 @@ ggplot(
   segment.color = "grey70",
   max.overlaps = 20,
   show.legend = FALSE
-) +
+  ) +
   
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey60") +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
@@ -199,7 +199,7 @@ ggplot(
   color = "Significance"
 )
 
-ggsave(file.path(results_dir, "RNA_protein_LFC_concordance.png"),
+ggsave(file.path(results_dir, "RNA_protein_LFC_concordance.pdf"),
   width = 7,
   height = 6
   )

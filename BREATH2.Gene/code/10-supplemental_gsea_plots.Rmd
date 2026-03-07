@@ -74,11 +74,10 @@ p_il6_jak <- gseaplot2(
 p_il6_jak
 
 ggsave(
-  file.path(results_dir, "GSEA_Hallmark_IL6_JAK_STAT3.png"),
+  file.path(results_dir, "GSEA_Hallmark_IL6_JAK_STAT3.pdf"),
   plot = p_il6_jak,
   width = 7,
-  height = 6,
-  dpi = 300
+  height = 6
 )
 
 
@@ -100,11 +99,10 @@ p_inflam <- gseaplot2(
 p_inflam
 
 ggsave(
-  file.path(results_dir, "GSEA_Hallmark_Inflammatory_Response.png"),
+  file.path(results_dir, "GSEA_Hallmark_Inflammatory_Response.pdf"),
   plot = p_inflam,
   width = 7,
-  height = 6,
-  dpi = 300
+  height = 6
 )
 
 
@@ -125,11 +123,10 @@ p_allograft <- gseaplot2(
 p_allograft
 
 ggsave(
-  file.path(results_dir, "GSEA_Hallmark_Allograft_Rejection.png"),
+  file.path(results_dir, "GSEA_Hallmark_Allograft_Rejection.pdf"),
   plot = p_allograft,
   width = 7,
-  height = 6,
-  dpi = 300
+  height = 6
 )
 
 
@@ -150,11 +147,10 @@ p_tnfa_nfkb <- gseaplot2(
 p_tnfa_nfkb
 
 ggsave(
-  file.path(results_dir, "GSEA_Hallmark_TNFA_NFKB.png"),
+  file.path(results_dir, "GSEA_Hallmark_TNFA_NFKB.pdf"),
   plot = p_tnfa_nfkb,
   width = 7,
-  height = 6,
-  dpi = 300
+  height = 6
 )
 
 
@@ -175,11 +171,10 @@ p_apoptosis <- gseaplot2(
 p_apoptosis
 
 ggsave(
-  file.path(results_dir, "GSEA_Hallmark_Apoptosis.png"),
+  file.path(results_dir, "GSEA_Hallmark_Apoptosis.pdf"),
   plot = p_apoptosis,
   width = 7,
-  height = 6,
-  dpi = 300
+  height = 6
 )
 
 
@@ -200,11 +195,10 @@ p_il2_stat5 <- gseaplot2(
 p_il2_stat5
 
 ggsave(
-  file.path(results_dir, "GSEA_Hallmark_IL2_STAT5.png"),
+  file.path(results_dir, "GSEA_Hallmark_IL2_STAT5.pdf"),
   plot = p_il2_stat5,
   width = 7,
-  height = 6,
-  dpi = 300
+  height = 6
 )
 
 
@@ -225,11 +219,10 @@ p_complement <- gseaplot2(
 p_complement
 
 ggsave(
-  file.path(results_dir, "GSEA_Hallmark_Complement.png"),
+  file.path(results_dir, "GSEA_Hallmark_Complement.pdf"),
   plot = p_complement,
   width = 7,
-  height = 6,
-  dpi = 300
+  height = 6
 )
 
 

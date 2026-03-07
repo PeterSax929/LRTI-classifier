@@ -124,18 +124,15 @@ min_x <- min(loglog_df$mean_rna_vst, na.rm=T)
 ggplot(
   loglog_df,
   aes(x = mean_rna_vst, y = mean_protein_log2)
-) +
+  ) +
   geom_point(alpha = 0.25, size = 1, color = "grey30") +
-  
   # dashed y = x line
   geom_abline(slope = 1, intercept = 0,
               linetype = "dashed",
               color = "grey50") +
-  
   geom_smooth(method = "lm", se = FALSE,
               color = "firebrick",
               linewidth = 0.8) +
-  
   geom_text_repel(
     data = label_df,
     aes(label = gene_symbol),
@@ -144,14 +141,11 @@ ggplot(
     box.padding = 0.4,
     segment.color = "grey70"
   ) +
-  
   coord_cartesian(
     xlim = c(min_x, 18),
     ylim = c(min_x, 18)
   ) +
-  
   theme_classic() +
-
   labs(
     x = "Mean RNA expression (VST)",
     y = expression("Mean protein abundance (log"[2]*")"),
@@ -164,7 +158,7 @@ ggplot(
   
   
 ggsave(
-  file.path(results_dir, "RNA_protein_loglog_abundance.png"),
+  file.path(results_dir, "RNA_protein_loglog_abundance.pdf"),
   width = 6,
   height = 6
 )

@@ -77,12 +77,6 @@ virus_reports <- microbe_reports_bgfilter %>%
       levels = metadata_df_with_folds$sample_name)) %>%
   arrange(sample_name)
 
-# Run by dominant virus
-#viral_rpm_df <- virus_reports %>%
-  #group_by(sample_name) %>%
-  #summarize(
-    #viral_rpm = max(nt_rpm, na.rm=T))
-
 # Run by sum viral rpm
 viral_rpm_df <- virus_reports %>%
   group_by(sample_name) %>%
@@ -154,7 +148,7 @@ protein_ifn_long <- protein_mat %>%
   left_join(
     metadata_df_with_folds %>%
       dplyr::select(patient_id, sample_name),
-    by = "patient_id"
+      by = "patient_id"
   ) %>%
   left_join(
     viral_rpm_df,
@@ -198,9 +192,9 @@ cor_ifn_df <- ifn_combined_df %>%
   group_by(modality, gene_symbol) %>%
   summarize(
     spearman_r = cor(expr_scaled,
-                     log10(viral_rpm + 1),
-                     method = "spearman",
-                     use = "complete.obs"),
+    log10(viral_rpm + 1),
+    method = "spearman",
+    use = "complete.obs"),
     .groups = "drop"
   )
 
@@ -209,9 +203,8 @@ ggplot(
   aes(
     x = log10(viral_rpm + 1),
     y = expr_scaled,
-    color = modality
-  )
-) +
+    color = modality)
+  ) +
   geom_point(alpha = 0.7, size = 1.6) +
   geom_smooth(method = "lm", se = FALSE) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
@@ -232,7 +225,7 @@ ggplot(
   inherit.aes = FALSE,
   size = 3,
   hjust = 1
-) +
+  ) +
   facet_wrap(~ gene_symbol) +
   coord_cartesian(ylim = c(-3, 3.8)) +
   scale_color_manual(values = omics_colors) +
@@ -248,11 +241,10 @@ ggplot(
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "Viral_RPM_vs_IFN_RNA_Protein.png"),
+  filename = file.path(results_dir, "Viral_RPM_vs_IFN_RNA_Protein.pdf"),
   plot = last_plot(),
   width = 9,
-  height = 5,
-  dpi = 300
+  height = 5
 )
 
 
@@ -266,7 +258,7 @@ ggsave(
 ifn_geneset <- msigdbr(
   species = "Homo sapiens",
   category = "H"
-) %>%
+  ) %>%
   filter(gs_name %in% c(
     "HALLMARK_INTERFERON_ALPHA_RESPONSE",
     "HALLMARK_INTERFERON_GAMMA_RESPONSE"
@@ -310,7 +302,7 @@ ifn_score_plot_df <- ifn_score_df %>%
   left_join(
     viral_rpm_df %>% 
       dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
-    by = "sample_name"
+      by = "sample_name"
   )
 
 # Filter to Definite LRTI cases only
@@ -358,7 +350,7 @@ ifn_score_combined_df <- bind_rows(
     left_join(
       viral_rpm_df %>%
         dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
-      by = "sample_name"
+        by = "sample_name"
     ) %>%
     filter(LRTI_adjudication == "Definite") %>%
     dplyr::select(sample_name, viral_rpm, IFN_score, modality)
@@ -376,8 +368,8 @@ cor_composite_df <- ifn_score_combined_df %>%
   group_by(modality) %>%
   summarize(
     spearman_r = cor(IFN_score,
-                     log10(viral_rpm + 1),
-                     method = "spearman"),
+    log10(viral_rpm + 1),
+    method = "spearman"),
     .groups = "drop"
   )
 
@@ -386,9 +378,8 @@ ggplot(
   aes(
     x = log10(viral_rpm + 1),
     y = IFN_score,
-    color = modality
-  )
-) +
+    color = modality)
+  ) +
   geom_point(alpha = 0.7, size = 1.8) +
   geom_smooth(method = "lm", se = TRUE) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
@@ -408,7 +399,7 @@ ggplot(
   inherit.aes = FALSE,
   size = 4,
   hjust = 1
-) +
+  ) +
   coord_cartesian(ylim = c(-1.7,1.5)) +
   scale_color_manual(values = omics_colors) +
   theme_classic() +
@@ -423,11 +414,10 @@ ggplot(
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "Composite_IFN_score_vs_Viral_RPM.png"),
+  filename = file.path(results_dir, "Composite_IFN_score_vs_Viral_RPM.pdf"),
   plot = last_plot(),
   width = 7,
-  height = 5,
-  dpi = 300
+  height = 5
 )
 
 

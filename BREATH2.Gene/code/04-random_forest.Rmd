@@ -79,17 +79,17 @@ lassoRF_cv_outer_fold <- function(test_fold) {
 # 4.2a. Use precomputed vst from LASSO
   
   
-# full_vsd is genes x samples — transpose to samples x genes
-X_all <- t(as.matrix(full_vsd))
+  # full_vsd is genes x samples — transpose to samples x genes
+  X_all <- t(as.matrix(full_vsd))
 
-# Ensure X_all row order matches metadata order
-X_all <- X_all[metadata_df_with_folds$sample_name, , drop=F]
+  # Ensure X_all row order matches metadata order
+  X_all <- X_all[metadata_df_with_folds$sample_name, , drop=F]
 
-# training / test matrices
-X_train <- X_all[train, keep, drop=F]
-X_test  <- X_all[test, keep, drop=F]
+  # training / test matrices
+  X_train <- X_all[train, keep, drop=F]
+  X_test  <- X_all[test, keep, drop=F]
 
-stopifnot(all(colnames(X_train) %in% selected_lasso_coefs$gene))
+  stopifnot(all(colnames(X_train) %in% selected_lasso_coefs$gene))
 
   # Fit Random Forest (10000 Trees)
   rf <- randomForest(X_train, y[train], ntree = ntrees)
@@ -116,7 +116,7 @@ rf_preds <- cv_list %>%
   lapply(function(x) {
     data.frame(
       sample_name = metadata_df_with_folds$sample_name[
-        metadata_df_with_folds$fold == x$test_fold],
+      metadata_df_with_folds$fold == x$test_fold],
       pred = x$pred
     )
   }) %>%
@@ -168,6 +168,8 @@ rf_votes <- cv_list %>%
 table(selected_lasso_coefs$gene_symbol)
 
 nrow(rf_preds) == nrow(metadata_df_with_folds) # Should return TRUE
+
+all(colnames(full_vsd) == metadata_df_with_folds$sample_name) # Should return TRUE
 
 
 
