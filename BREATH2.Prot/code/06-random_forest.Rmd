@@ -100,15 +100,16 @@ patient_info_with_folds <- as.data.frame(patient_info_with_folds)
 # Collect out-of-fold predictions for all samples
 rf_preds <- cv_list %>%
   lapply(function(x) {
-    data.frame(
-      patient_id = rownames(protein_mat)[patient_info_with_folds$fold == x$test_fold],
-      pred = x$pred
+    data.frame(patient_id = 
+    rownames(protein_mat)[patient_info_with_folds$fold == x$test_fold],
+    pred = x$pred
     )
   }) %>%
   bind_rows() %>%
-  dplyr::left_join(dplyr::select(patient_info_with_folds, patient_id, LRTI_adjudication), 
-            by = "patient_id") %>%
-  dplyr::relocate(LRTI_adjudication, .after = patient_id)
+  dplyr::left_join(
+  dplyr::select(patient_info_with_folds, patient_id, LRTI_adjudication), 
+  by = "patient_id") %>%
+    dplyr::relocate(LRTI_adjudication, .after = patient_id)
 
 # Save RF predictions
 write.csv(rf_preds, 
@@ -133,9 +134,10 @@ rf_votes <- cv_list %>%
       dplyr::select(test_fold, patient_id, pred)
   }) %>%
   bind_rows() %>%
-  dplyr::left_join(dplyr::select(patient_info_with_folds, patient_id, LRTI_adjudication), 
-            by = "patient_id") %>%
-  dplyr::relocate(LRTI_adjudication, .after = patient_id)
+  dplyr::left_join(
+    dplyr::select(patient_info_with_folds, patient_id, LRTI_adjudication), 
+    by = "patient_id") %>%
+       dplyr::relocate(LRTI_adjudication, .after = patient_id)
 
 
 
@@ -151,6 +153,8 @@ table(selected_lasso_coefs$protein)
 all(selected_lasso_coefs$protein %in% colnames(protein_mat)) # Should return TRUE
 
 nrow(rf_preds) == nrow(patient_info_with_folds) # Should return TRUE
+
+all(rownames(protein_mat) == patient_info_with_folds$patient_id) # Should return TRUE
 
 
 

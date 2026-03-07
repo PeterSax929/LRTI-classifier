@@ -25,7 +25,6 @@ patient_info <- patient_info_ALL[patient_info_ALL$LRTI_adjudication %in%
 # Includes only the protein matrix for Definite and No Evidence patients
 protein_mat <- protein_mat_ALL[match(patient_info$patient_id, 
                                        rownames(protein_mat_ALL)), ]
-
 write.csv(protein_mat,
           file.path(data_dir, "protein_mat.csv"),
           row.names=T)

@@ -71,8 +71,8 @@ output_auc_roc <- function(preds_df, output_suffix) {
     auc = as.numeric(roc_obj$auc),
     auc_lower = ci_vals[1],
     auc_upper = ci_vals[3]
-  )
-}, .groups = "drop")
+    )
+  }, .groups = "drop")
 
 
   # Determine number of folds
