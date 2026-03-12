@@ -5,7 +5,7 @@ output:
     toc: true
 ---
 
-```{r, warning=F, message=F}
+```{r, warning=F}
 
 
 library(dplyr)

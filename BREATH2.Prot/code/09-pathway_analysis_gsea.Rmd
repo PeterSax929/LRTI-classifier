@@ -47,12 +47,6 @@ names(protein_ranks) <- res_df$gene
 # Sort decreasing 
 protein_ranks <- sort(protein_ranks, decreasing=T)
 
-# protein_ranks is a named numeric vector
-protein_ranks_df <- data.frame(
-  gene = names(protein_ranks),
-  log2FC = as.numeric(protein_ranks)
-)
-
 
 
 
@@ -67,6 +61,7 @@ hallmark_sets <- msigdbr(
 ) %>%
   dplyr::select(gs_name, gene_symbol)
 
+set.seed(8634782)
 gsea_hallmark_prot <- GSEA(
   geneList  = protein_ranks,
   TERM2GENE = hallmark_sets,
@@ -97,10 +92,12 @@ reactome_sets <- msigdbr(
 ) %>%
   dplyr::select(gs_name, gene_symbol)
 
+set.seed(8634782)
 gsea_reactome_prot <- GSEA(
   geneList  = protein_ranks,
   TERM2GENE = reactome_sets,
   pvalueCutoff = 0.05,
+  eps = 0,
   verbose = FALSE
 )
 
@@ -133,13 +130,6 @@ p_ifng_prot <- gseaplot2(
   title = "Protein Hallmark IFNγ Response",
   base_size = 12,
   subplots = c(1,2,3))
-
-ggsave(
-  file.path(results_dir, "GSEA_IFNG_protein.pdf"),
-  p_ifng_prot,
-  width = 7,
-  height = 6
-)
 
 # IFNα
 p_ifna_prot <- gseaplot2(

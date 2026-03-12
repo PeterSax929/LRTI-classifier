@@ -133,7 +133,8 @@ label_df <- merged_df %>%
   bind_rows(
     merged_df %>%
       filter(sig_class == "RNA & Protein") %>%
-      mutate(concordance = abs(log2FC_RNA) + abs(log2FC_protein)) %>%
+      mutate(concordance = sign(log2FC_RNA) == sign(log2FC_protein),
+      combined_fc = abs(log2FC_RNA) + abs(log2FC_protein)) %>%
       slice_max(concordance, n = 12)
   ) %>%
   distinct(gene_symbol, .keep_all = TRUE)
@@ -150,20 +151,19 @@ ggplot(
   merged_df,
   aes(x = log2FC_RNA, y = log2FC_protein, color = sig_class)
   ) +
-  
   geom_point(aes(size = point_size), alpha = 0.6) +
-  
   scale_size_identity() +
-  
   geom_smooth(
   data = merged_df %>% filter(sig_class == "RNA & Protein"),
   aes(x = log2FC_RNA, y = log2FC_protein),
-  method = "lm",
-  se = F,
+  method = "loess",
+  span = 0.75,
+  se = TRUE,
   color = "purple",
+  fill = "purple",
+  alpha = 0.15,
   linewidth = 0.8
   ) +
-  
   geom_text_repel(
   data = label_df,
   aes(label = gene_symbol),
@@ -173,7 +173,6 @@ ggplot(
   max.overlaps = 20,
   show.legend = FALSE
   ) +
-  
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey60") +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
   scale_color_manual(values = c(
@@ -182,10 +181,7 @@ ggplot(
     "Protein only" = "#55A868",
     "Not Significant" = "grey85")
     ) +
-  
-  theme_classic() +
   theme_minimal(base_size = 12, base_family = "Helvetica") +
-  
   labs(
   x = expression(log[2]*FC: (Transcriptome)),
   y = expression(log[2]*FC: (Proteome)),
@@ -194,7 +190,7 @@ ggplot(
     "All features: Spearman \u03C1 = ", round(cor_spearman, 2),
     " | Jointly significant: \u03C1 = ",
     round(cor_spearman_both, 2),
-    " (n = ", nrow(merged_df), ")"
+    " (n = ", sum(merged_df$sig_class == "RNA & Protein"), ")"
   ),
   color = "Significance"
 )

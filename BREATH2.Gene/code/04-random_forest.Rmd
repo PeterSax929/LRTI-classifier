@@ -12,8 +12,6 @@ library(dplyr)
 library(magrittr)
 library(randomForest)
 library(tibble)
-library(DESeq2)    
-library(SummarizedExperiment)
 
 
 
@@ -26,15 +24,13 @@ library(SummarizedExperiment)
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
-set.seed(8634782)
-
 # Import data
 metadata_df_with_folds <- read.csv(
   file.path(data_dir, "metadata_df_with_folds.csv"),
   stringsAsFactors=F)
 
 full_vsd <- read.csv(
-  file.path(data_dir, "vst_combined_per_fold.csv"),
+  file.path(data_dir, "vst_full.csv"),
   stringsAsFactors=F, row.names=1)
 
 # Define ntrees 
@@ -61,6 +57,7 @@ y <- as.factor(metadata_df_with_folds$LRTI_adjudication)
 
 # Function to run Random Forest for one outer CV fold
 lassoRF_cv_outer_fold <- function(test_fold) {
+  set.seed(8634782 + test_fold)
   
   # Extract proteins selected by LASSO for this fold
   keep <- selected_lasso_coefs %>%

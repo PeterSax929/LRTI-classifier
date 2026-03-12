@@ -33,7 +33,7 @@ metadata_df_with_folds <- read.csv(
 
 protein_mat <- read.csv(
   file.path(data_dir, "protein_mat.csv"),
-  stringsAsFactors=F, row.names=1)
+  stringsAsFactors=F, check.names=F, row.names=1)
 
 # Ensure metadata rows are aligned to protein_mat (safety check)
 metadata_df_with_folds <- metadata_df_with_folds %>%
@@ -52,11 +52,6 @@ protein_mat <- protein_mat[rownames(metadata_df_with_folds), ]
 
 
 # Create design matrix (Definite vs No Evidence)
-metadata_df_with_folds$LRTI_adjudication <- factor(
-  metadata_df_with_folds$LRTI_adjudication,
-  levels = c("No Evidence", "Definite"))
-
-# Ensure covariates are correctly formatted
 metadata_df_with_folds$LRTI_adjudication <- factor(
   metadata_df_with_folds$LRTI_adjudication,
   levels = c("No Evidence", "Definite"))
@@ -110,19 +105,6 @@ res_df <- res_df %>%
     sig & log2FoldChange < 0  ~ "NoEvidence",
     TRUE                      ~ "NotSignificant"
   ))
-
-# Top 10 significant proteins per direction
-top_definite <- res_df %>% 
-  filter(direction == "Definite") %>%
-  arrange(abs(log2FoldChange)) %>%
-  head(10)
-
-top_noEvidence <- res_df %>% 
-  filter(direction == "NoEvidence") %>%
-  arrange(abs(log2FoldChange)) %>%
-  head(10)
-
-top_labels <- bind_rows(top_definite, top_noEvidence)
 
 
 

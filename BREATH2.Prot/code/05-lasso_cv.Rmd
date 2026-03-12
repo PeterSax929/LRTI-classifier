@@ -26,8 +26,6 @@ library(ggplot2)
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
 
-set.seed(8634782)
-
 # Import data
 patient_info_with_folds <- read.csv(
   file.path(data_dir, "patient_info_with_folds.csv"),
@@ -54,6 +52,7 @@ y <- patient_info_with_folds$LRTI_adjudication == "Definite"
 
 # Function for a single outer CV fold
 lasso_cv_outer_fold <- function(test_fold) {
+  set.seed(8634782 + test_fold)
   
   train <- patient_info_with_folds$fold != test_fold
   
@@ -63,9 +62,6 @@ lasso_cv_outer_fold <- function(test_fold) {
     family = "binomial",
     standardize = TRUE
     )
-
-  # Count nonzero coefficients at each lambda
-  nz <- apply(fit$beta, 2, function(b) sum(b != 0))
 
   
 
@@ -214,7 +210,7 @@ ggplot(
 
 
 top10coefs <- lasso_fold_coefs %>% 
-    slice_max(order_by = abs(lasso_fold_coefs$coef), n=10)
+    slice_max(order_by = abs(coef), n=10)
 
 ggplot(
   top10coefs,

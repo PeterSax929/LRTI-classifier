@@ -22,11 +22,12 @@ library(msigdbr)
 
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 
 # Import full VST matrix
 full_vsd <- read.csv(
-  file.path(data_dir, "vst_combined_per_fold.csv"),
+  file.path(data_dir, "vst_full.csv"),
   stringsAsFactors=F, check.names=F, row.names=1)
 
 # Convert rownames (ENSG) to a column and map to gene symbols
@@ -108,9 +109,8 @@ rna_ifn_long <- full_vsd %>%
     names_to = "sample_name",
     values_to = "expr"
   ) %>%
-  mutate(expr_log2 = log2(expr + 1)) %>%
   group_by(gene_symbol) %>%
-  mutate(expr_scaled = as.numeric(scale(expr_log2))) %>%
+  mutate(expr_scaled = as.numeric(scale(expr))) %>%
   ungroup()
 
 ifn_rna_df <- rna_ifn_long %>%
@@ -206,7 +206,7 @@ ggplot(
     color = modality)
   ) +
   geom_point(alpha = 0.7, size = 1.6) +
-  geom_smooth(method = "lm", se = FALSE) +
+  geom_smooth(method="loess", span=0.75, se=TRUE, alpha=0.15) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
   geom_text(
   data = cor_ifn_df %>%
@@ -283,13 +283,12 @@ rna_ifn_hallmark_long <- full_vsd %>%
     cols = -c(gene, gene_symbol),
     names_to = "sample_name",
     values_to = "expr"
-  ) %>%
-  mutate(expr_log2 = log2(expr + 1))
+  )
 
 # Calculate composite IFN score per sample
 ifn_score_df <- rna_ifn_hallmark_long %>%
   group_by(gene_symbol) %>%
-  mutate(expr_scaled = scale(expr_log2)) %>%  # scale per gene
+  mutate(expr_scaled = as.numeric(scale(expr))) %>%  # scale per gene
   ungroup() %>%
   group_by(sample_name) %>%
   summarize(IFN_score = mean(expr_scaled, na.rm=T))
@@ -337,7 +336,7 @@ protein_ifn_hallmark_long <- protein_mat %>%
 
 protein_ifn_score_df <- protein_ifn_hallmark_long %>%
   group_by(gene_symbol) %>%
-  mutate(expr_scaled = scale(expr_log2)) %>%   # scale per protein
+  mutate(expr_scaled = as.numeric(scale(expr_log2))) %>%   # scale per protein
   ungroup() %>%
   group_by(sample_name) %>%
   summarize(IFN_score = mean(expr_scaled, na.rm=T)) %>%
@@ -369,7 +368,8 @@ cor_composite_df <- ifn_score_combined_df %>%
   summarize(
     spearman_r = cor(IFN_score,
     log10(viral_rpm + 1),
-    method = "spearman"),
+    method = "spearman",
+    use = "complete.obs"),
     .groups = "drop"
   )
 
@@ -381,7 +381,7 @@ ggplot(
     color = modality)
   ) +
   geom_point(alpha = 0.7, size = 1.8) +
-  geom_smooth(method = "lm", se = TRUE) +
+  geom_smooth(method="loess", span=0.75, se=TRUE, alpha=0.15) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
   geom_text(
   data = cor_composite_df %>% 

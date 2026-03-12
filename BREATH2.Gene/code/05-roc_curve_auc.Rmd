@@ -11,6 +11,7 @@ output:
 library(dplyr)
 library(magrittr)
 library(pROC)
+library(ggplot2)
 
 
 
@@ -29,17 +30,23 @@ metadata_df_with_folds <- read.csv(
   stringsAsFactors=F)
 
 # Import out-of-fold predictions
-lassoRF_preds <- read.csv(
+lassoRF_preds_gene <- read.csv(
   file.path(results_dir, "lassoRF_preds.csv"),
   stringsAsFactors=F)
 
+# Import protein preds
+lassoRF_preds_prot <- read.csv(
+  file.path(
+  "C:/Users/User/Documents/UCSF/BREATH2.Prot/results/lassoRF_preds.csv"),
+  stringsAsFactors=F)
+
 # Ensure consistent factor levels
-lassoRF_preds$LRTI_adjudication <- factor(
-  lassoRF_preds$LRTI_adjudication,
+lassoRF_preds_gene$LRTI_adjudication <- factor(
+  lassoRF_preds_gene$LRTI_adjudication,
   levels = c("No Evidence", "Definite"))
 
 # Merge
-merged_preds <- lassoRF_preds %>%
+merged_preds <- lassoRF_preds_gene %>%
   dplyr::inner_join(metadata_df_with_folds %>% 
   dplyr::select(sample_name, fold),
     by = "sample_name")
@@ -158,10 +165,6 @@ ci_auc <- pROC::ci.auc(
   conf.level = 0.95
 )
 
-message("Lower AUC: ", round(ci_auc[1], 3))
-message("Mean AUC: ", round(as.numeric(ci_auc[2]), 3))
-message("Upper AUC: ", round(ci_auc[3], 3))
-
 mean_auc <- as.numeric(ci_auc[2])
 lower_auc <- ci_auc[1]
 upper_auc <- ci_auc[3]
@@ -177,6 +180,96 @@ message(
 )
 
 print(auc_lassoRF)
+
+
+
+
+
+
+# 5.5. Gene / Protein adjudication plot
+
+
+# Combine rf_preds for gene and prot into one data frame
+combined_preds <- metadata_df_with_folds %>%
+  dplyr::select(sample_name, patient_id) %>%
+  inner_join(lassoRF_preds_gene, by = "sample_name") %>%
+  inner_join(
+    lassoRF_preds_prot %>%
+      dplyr::select(patient_id, pred_prot = pred),
+    by = "patient_id"
+  ) %>%
+  dplyr::rename(pred_gene = pred) %>%
+  dplyr::select(sample_name, patient_id, LRTI_adjudication, pred_gene, pred_prot)
+
+
+
+
+
+
+# 5.5a. Plot
+
+combined_preds <- combined_preds %>%
+  mutate(
+    switched = (pred_gene >= 0.5) != (pred_prot >= 0.5),
+    LRTI_adjudication = factor(LRTI_adjudication, levels = c("Definite", "No Evidence"))
+  )
+
+ggplot(combined_preds) +
+  # Non-switcher lines
+  geom_segment(
+    data = combined_preds %>% filter(!switched),
+    aes(x = 1, xend = 2, y = pred_gene, yend = pred_prot),
+    color = "grey82", linewidth = 0.4
+  ) +
+  # Switcher lines
+  geom_segment(
+    data = combined_preds %>% filter(switched),
+    aes(x = 1, xend = 2, y = pred_gene, yend = pred_prot),
+    color = "grey40", linewidth = 1
+  ) +
+  # Gene dots
+  geom_point(
+    aes(x = 1, y = pred_gene, color = LRTI_adjudication),
+    size = 2.4, alpha = 0.9
+  ) +
+  # Protein dots
+  geom_point(
+    aes(x = 2, y = pred_prot, color = LRTI_adjudication),
+    size = 2.4, alpha = 0.9
+  ) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey40", linewidth = 0.5) +
+  scale_color_manual(
+    values = c("Definite" = "red", "No Evidence" = "#0072B2"),
+    breaks = c("Definite", "No Evidence")
+  ) +
+  scale_x_continuous(
+    breaks = c(1, 2),
+    labels = c("Gene", "Protein"),
+    limits = c(0.7, 2.3)
+  ) +
+  scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.25, 0.5, 0.75, 1)) +
+  facet_wrap(~ LRTI_adjudication, ncol = 2) +
+  labs(
+    title = "Classifier Prediction Shift: Gene vs. Protein Workflow",
+    subtitle = "Dark lines = patients who switched classification at 0.5 threshold",
+    x = NULL,
+    y = "RF predicted P(LRTI)",
+    color = "LRTI adjudication"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    text = element_text(family = "Helvetica", face = "bold"),
+    axis.text = element_text(face = "bold"),
+    strip.text = element_text(face = "bold", size = 13),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(face = "bold")
+  )
+
+ggsave(
+  file.path(results_dir, "gene_vs_protein_pred_shift.pdf"),
+  width = 7, height = 5
+)
 
 
 

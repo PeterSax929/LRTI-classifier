@@ -66,9 +66,6 @@ all(rownames(protein_mat) == patient_info$patient_id)  # Should return TRUE
 any(is.na(match(patient_info$patient_id, 
                 rownames(protein_mat_ALL))))  # Should return FALSE
 
-# Ensures that protein_mat rownames match patient_id column in patient_info
-all(rownames(protein_mat) == patient_info$patient_id)  # Should return TRUE
-
 
 
 

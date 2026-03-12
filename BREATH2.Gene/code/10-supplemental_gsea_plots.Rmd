@@ -48,6 +48,7 @@ hallmark_sets <- msigdbr(
 ) %>%
   dplyr::select(gs_name, gene_symbol)
 
+set.seed(8634782)
 gsea_hallmark <- GSEA(
   geneList     = gene_ranks,
   TERM2GENE    = hallmark_sets,

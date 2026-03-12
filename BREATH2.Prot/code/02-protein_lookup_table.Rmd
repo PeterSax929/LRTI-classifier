@@ -10,9 +10,7 @@ output:
 
 library(dplyr)
 library(SomaScan.db)
-library(SomaDataIO)
 library(AnnotationDbi)  
-library(tibble)
 
 
 

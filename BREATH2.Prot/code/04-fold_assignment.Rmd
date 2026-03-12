@@ -97,6 +97,11 @@ print(counts)
 
 print(min_NE_per_fold)
 
+stopifnot(!any(is.na(patient_info_with_folds$fold)),  # every patient assigned
+  all(counts[, "No Evidence"] >= min_NE_per_fold),  # constraint met
+  nrow(patient_info_with_folds) == nrow(patient_info)  # no rows dropped
+)
+
 
 
 

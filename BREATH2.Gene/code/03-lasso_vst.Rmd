@@ -14,7 +14,6 @@ library(DESeq2)
 library(glmnet)
 library(tibble)
 library(ggplot2)
-library(knitr)
 
 
 
@@ -27,8 +26,6 @@ library(knitr)
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
-
-set.seed(8634782)
 
 # Metadata with folds
 metadata_df_with_folds <- read.csv(
@@ -61,6 +58,7 @@ ensg2gene <- read.csv(
 
 
 lasso_cv_outer_fold <- function(test_fold) {
+   set.seed(8634782 + test_fold)
 
   
   
@@ -104,7 +102,7 @@ lasso_cv_outer_fold <- function(test_fold) {
 
 
 
-# 3.2b. Find lambda that yields 3 genes per fold
+# 3.2b. Find lambda path
 
 
   # Fit full lambda path
@@ -177,11 +175,6 @@ lasso_cv_outer_fold <- function(test_fold) {
     sample_name = colnames(test_counts),
     pred = pred_vec,
     stringsAsFactors=F)
-
-  # Coefficients at selected lambda (change lambda_k1/3 or cv_fit$lambda.1se)
-  coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]
-
-  nonzero <- coefs_vec[coefs_vec != 0]
   
   
   
@@ -198,14 +191,12 @@ lasso_cv_outer_fold <- function(test_fold) {
     gene_symbol = ensg2gene[names(nonzero)],
     fold = test_fold, 
     stringsAsFactors=F)
-  
-  vsd_combined <- vsd_test_mat
 
   list(
     pred = preds,
     mod = fit, 
     coef = nonzero_df,
-    vsd_cols = vsd_combined)
+    vsd_cols = vsd_test_mat)
 }
 
 
@@ -232,7 +223,7 @@ stopifnot(all(colnames(full_vsd) == metadata_df_with_folds$sample_name))
 
 # Save the matrix
 write.csv(full_vsd,
-          file.path(data_dir, "vst_combined_per_fold.csv"),
+          file.path(data_dir, "vst_full.csv"),
           row.names=T)
 
 # Collect predictions and coefficients for each fold

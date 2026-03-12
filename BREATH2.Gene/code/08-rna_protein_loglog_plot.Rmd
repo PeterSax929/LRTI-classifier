@@ -12,7 +12,6 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(ggrepel)
-library(tibble)
 
 
 
@@ -23,16 +22,17 @@ library(tibble)
 
 
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 # RNA vst matrix (genes x samples)
 full_vsd <- read.csv(
-  file.path(data_dir, "vst_combined_per_fold.csv"),
-  row.names=1)
+  file.path(data_dir, "vst_full.csv"),
+  check.names=F, row.names=1)
 
 # Protein log2-normalized abundances matrix (samples x proteins)
 protein_mat <- read.csv(
   "C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv",
-  row.names=1)
+  check.names=F, row.names=1)
 
 
 
@@ -42,22 +42,14 @@ protein_mat <- read.csv(
 # 8.2. Prepare RNA
 
 
-rna_mean <- full_vsd %>%
-  as.data.frame() %>%
-  rownames_to_column("gene") %>%
-  mutate(gene_symbol = ensg2gene[gene]) %>%
-  mutate(gene_symbol = ifelse(is.na(gene_symbol), gene, gene_symbol)) %>%
-  dplyr::select(-gene) %>%
-  pivot_longer(
-    cols = -gene_symbol,
-    names_to = "sample_name",
-    values_to = "expr_vst"
+rna_mean <- data.frame(
+  gene = rownames(full_vsd),
+  mean_rna_vst = rowMeans(full_vsd, na.rm=T)
   ) %>%
+  mutate(gene_symbol = ifelse(is.na(ensg2gene[gene]),
+  gene, ensg2gene[gene])) %>%
   group_by(gene_symbol) %>%
-  summarize(
-    mean_rna_vst = mean(expr_vst, na.rm=T),
-    .groups = "drop"
-  )
+  summarize(mean_rna_vst = mean(mean_rna_vst, na.rm=T), .groups="drop")
 
 
 
@@ -67,18 +59,9 @@ rna_mean <- full_vsd %>%
 # 8.3. Prepare protein
 
 
-protein_mean <- protein_mat %>%
-  as.data.frame() %>%
-  rownames_to_column("patient_id") %>%
-  pivot_longer(
-    cols = -patient_id,
-    names_to = "gene_symbol",
-    values_to = "protein_log2"
-  ) %>%
-  group_by(gene_symbol) %>%
-  summarize(
-    mean_protein_log2 = mean(protein_log2, na.rm=T),
-    .groups = "drop"
+protein_mean <- data.frame(
+  gene_symbol = colnames(protein_mat),
+  mean_protein_log2 = colMeans(protein_mat, na.rm=T)
   )
 
 
@@ -88,9 +71,6 @@ protein_mean <- protein_mat %>%
 
 # 8.4. Merge RNA with protein
 
-
-rna_mean <- rna_mean %>% distinct(gene_symbol, .keep_all=T)
-protein_mean <- protein_mean %>% distinct(gene_symbol, .keep_all=T)
 
 loglog_df <- inner_join(
   rna_mean,
@@ -126,13 +106,9 @@ ggplot(
   aes(x = mean_rna_vst, y = mean_protein_log2)
   ) +
   geom_point(alpha = 0.25, size = 1, color = "grey30") +
-  # dashed y = x line
-  geom_abline(slope = 1, intercept = 0,
-              linetype = "dashed",
-              color = "grey50") +
-  geom_smooth(method = "lm", se = FALSE,
-              color = "firebrick",
-              linewidth = 0.8) +
+  geom_smooth(method="loess", span=0.75, se=TRUE,
+            color="firebrick", fill="firebrick",
+            alpha=0.15, linewidth=0.8) +
   geom_text_repel(
     data = label_df,
     aes(label = gene_symbol),

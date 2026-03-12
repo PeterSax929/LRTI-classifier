@@ -71,6 +71,7 @@ hallmark_sets <- msigdbr(
   ) %>%
   dplyr::select(gs_name, gene_symbol)
 
+set.seed(8634782)
 gsea_hallmark <- GSEA(
   geneList     = gene_ranks,
   TERM2GENE    = hallmark_sets,
@@ -100,10 +101,12 @@ reactome_sets <- msigdbr(
   ) %>%
   dplyr::select(gs_name, gene_symbol)
 
+set.seed(8634782)
 gsea_reactome <- GSEA(
   geneList     = gene_ranks,
   TERM2GENE    = reactome_sets,
   pvalueCutoff = 0.05,
+  eps          = 0,
   verbose      = FALSE
 )
 
@@ -126,20 +129,6 @@ gsea_hallmark@result %>%
   arrange(desc(abs(NES))) %>%
   dplyr::select(ID, Description, NES, p.adjust) %>%
   head(10)
-
-gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_INTERFERON_GAMMA_RESPONSE",
-  title = "Hallmark IFNγ Response – Transcriptome",
-  base_size = 12
-)
-
-gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_INTERFERON_ALPHA_RESPONSE",
-  title = "Hallmark IFNα Response – Transcriptome",
-  base_size = 12
-)
 
 # IFNγ
 p_ifng <- gseaplot2(
@@ -196,6 +185,7 @@ ggsave(
 
 # View top Reactome pathways
 gsea_reactome@result %>%
+  filter(p.adjust < 0.05) %>%
   arrange(desc(abs(NES))) %>%
   head(20) %>%
   dplyr::select(ID, Description, NES, p.adjust)
@@ -249,6 +239,7 @@ hallmark_plot_df <- bind_rows(hallmark_top_up, hallmark_top_down) %>%
   mutate(
     Description = gsub("^HALLMARK_", "", Description),
     Description = gsub("_", " ", Description),
+    Description = str_wrap(Description, width=25),
     Description = factor(Description, levels = Description[order(NES)])
   )
 
@@ -258,7 +249,6 @@ p_hallmark_top16 <- ggplot(
   ) +
   # Center line (NES = 0)
   geom_vline(xintercept = 0, linewidth = 0.8, color = "black") +
-
   # Stems
   geom_segment(
     aes(x = 0, xend = NES, yend = Description),
@@ -292,12 +282,10 @@ p_hallmark_top16 <- ggplot(
     legend.position = "bottom",
     legend.text = element_text(size = 11),
     legend.key.width = unit(1.2, "lines"),
-
     # Center title across entire figure
     plot.title.position = "plot",
     plot.title = element_text(hjust = 0.5, face = "bold"),
     plot.subtitle = element_text(hjust = 0.5),
-
     # Add right margin so labels don't clip
     plot.margin = ggplot2::margin(t = 10, r = 40, b = 10, l = 10)
   ) +
@@ -340,13 +328,13 @@ reactome_plot_df <- gsea_reactome@result %>%
 reactome_top_up <- reactome_plot_df %>%
   filter(NES > 0) %>%
   arrange(desc(NES)) %>%
-  slice_head(n = 8)  # top 10
+  slice_head(n = 8)  # top 8
 
 # Top 8 DOWN (negative NES)
 reactome_top_down <- reactome_plot_df %>%
   filter(NES < 0) %>%
   arrange(NES) %>%      
-  slice_head(n = 8)  # top 10 negative
+  slice_head(n = 8)  # top 8 negative
 
 reactome_top16 <- bind_rows(reactome_top_up, reactome_top_down) %>%
   mutate(
@@ -372,6 +360,12 @@ p_reactome_top16 <- ggplot(
     linewidth = 0.7,
     color = "grey60"
   ) +
+  # Filled points
+  geom_point(
+    aes(fill = Direction),
+    shape = 21,
+    size = 4
+  ) +
   # Black outline
   geom_point(
     shape = 21,
@@ -379,12 +373,6 @@ p_reactome_top16 <- ggplot(
     fill = NA,
     color = "black",
     stroke = 1.2
-  ) +
-  # Filled points
-  geom_point(
-    aes(fill = Direction),
-    shape = 21,
-    size = 4
   ) +
   scale_fill_manual(
   values = c(
@@ -449,6 +437,7 @@ names(protein_ranks) <- prot_res$gene
 # Sort decreasing 
 protein_ranks <- sort(protein_ranks, decreasing=T)
 
+set.seed(8634782)
 gsea_hallmark_rna_all <- GSEA(
   geneList     = gene_ranks,
   TERM2GENE    = hallmark_sets,
@@ -457,6 +446,7 @@ gsea_hallmark_rna_all <- GSEA(
   verbose      = FALSE
 )
 
+set.seed(8634782)
 gsea_hallmark_prot_all <- GSEA(
   geneList     = protein_ranks,
   TERM2GENE    = hallmark_sets,

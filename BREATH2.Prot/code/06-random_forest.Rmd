@@ -25,8 +25,6 @@ library(tibble)
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
 
-set.seed(8634782)
-
 # Import data
 patient_info_with_folds <- read.csv(
   file.path(data_dir, "patient_info_with_folds.csv"),
@@ -62,6 +60,7 @@ y <- as.factor(patient_info_with_folds$LRTI_adjudication)
 
 # Function to run Random Forest for one outer CV fold
 lassoRF_cv_outer_fold <- function(test_fold) {
+  set.seed(8634782 + test_fold)
   
   # Extract proteins selected by LASSO for this fold
   keep <- selected_lasso_coefs %>%
