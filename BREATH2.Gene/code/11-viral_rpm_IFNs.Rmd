@@ -191,13 +191,22 @@ omics_colors <- c(
 cor_ifn_df <- ifn_combined_df %>%
   group_by(modality, gene_symbol) %>%
   summarize(
-    spearman_r = cor(expr_scaled,
-    log10(viral_rpm + 1),
-    method = "spearman",
-    use = "complete.obs"),
+    pearson_r = cor.test(expr_scaled, log10(viral_rpm + 1),
+      method = "pearson")$estimate,
     .groups = "drop"
   )
 
+interaction_p_df <- ifn_combined_df %>%
+  group_by(gene_symbol) %>%
+  summarize(
+    interaction_p = summary(lm(
+      expr_scaled ~ log10(viral_rpm + 1) * as.character(modality),
+      data = cur_data()
+    ))$coefficients["log10(viral_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"],
+    .groups = "drop"
+  )
+
+# Plot
 ggplot(
   ifn_combined_df,
   aes(
@@ -206,7 +215,7 @@ ggplot(
     color = modality)
   ) +
   geom_point(alpha = 0.7, size = 1.6) +
-  geom_smooth(method="loess", span=0.75, se=TRUE, alpha=0.15) +
+  geom_smooth(method="lm", se=TRUE, alpha=0.15) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
   geom_text(
   data = cor_ifn_df %>%
@@ -220,7 +229,18 @@ ggplot(
   aes(
     x = max(log10(ifn_combined_df$viral_rpm + 1)) * 0.98,
     y = y_pos,
-    label = paste0(modality, ": ρ = ", round(spearman_r, 2))
+    label = paste0(modality, ": r = ", round(pearson_r, 2))
+  ),
+  inherit.aes = FALSE,
+  size = 3,
+  hjust = 1
+  ) +
+  geom_text(
+  data = interaction_p_df,
+  aes(
+    x = max(log10(ifn_combined_df$viral_rpm + 1)) * 0.98,
+    y = 3.1,
+    label = paste0("p value = ", round(interaction_p, 3))
   ),
   inherit.aes = FALSE,
   size = 3,
@@ -366,12 +386,15 @@ ifn_score_combined_df <- bind_rows(
 cor_composite_df <- ifn_score_combined_df %>%
   group_by(modality) %>%
   summarize(
-    spearman_r = cor(IFN_score,
-    log10(viral_rpm + 1),
-    method = "spearman",
-    use = "complete.obs"),
+    pearson_r = cor.test(IFN_score, log10(viral_rpm + 1),
+      method = "pearson")$estimate,
     .groups = "drop"
   )
+
+interaction_p_composite <- summary(lm(
+  IFN_score ~ log10(viral_rpm + 1) * as.character(modality),
+  data = ifn_score_combined_df
+))$coefficients["log10(viral_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"]
 
 ggplot(
   ifn_score_combined_df,
@@ -381,7 +404,7 @@ ggplot(
     color = modality)
   ) +
   geom_point(alpha = 0.7, size = 1.8) +
-  geom_smooth(method="loess", span=0.75, se=TRUE, alpha=0.15) +
+  geom_smooth(method="lm", se=TRUE, alpha=0.15) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
   geom_text(
   data = cor_composite_df %>% 
@@ -394,9 +417,17 @@ ggplot(
   aes(
     x = max(log10(ifn_score_combined_df$viral_rpm + 1)) * 0.98,
     y = y_pos,
-    label = paste0(modality, ": ρ = ", round(spearman_r, 2))
+    label = paste0(modality, ": r = ", round(pearson_r, 2))
   ),
   inherit.aes = FALSE,
+  size = 4,
+  hjust = 1
+  ) +
+  annotate(
+  "text",
+  x = max(log10(ifn_score_combined_df$viral_rpm + 1)) * 0.98,
+  y = -1.7,
+  label = paste0("p value = ", signif(interaction_p_composite, 3)),
   size = 4,
   hjust = 1
   ) +
@@ -421,8 +452,157 @@ ggsave(
 )
 
 
+# RNA
+length(intersect(ifn_geneset, full_vsd$gene_symbol))
+
+# Protein
+length(intersect(ifn_geneset, colnames(protein_mat)))
+
+
+
+
+
+
+# 11.4. Separate IFNα and IFNγ composite scores
+
+
+# Split gene sets
+ifn_alpha_genes <- intersect(
+  msigdbr(species="Homo sapiens", category="H") %>%
+    filter(gs_name == "HALLMARK_INTERFERON_ALPHA_RESPONSE") %>%
+    pull(gene_symbol),
+  full_vsd$gene_symbol
+)
+
+ifn_gamma_genes <- intersect(
+  msigdbr(species="Homo sapiens", category="H") %>%
+    filter(gs_name == "HALLMARK_INTERFERON_GAMMA_RESPONSE") %>%
+    pull(gene_symbol),
+  full_vsd$gene_symbol
+)
+
+cat("IFNα genes in RNA data:", length(ifn_alpha_genes), "\n")
+cat("IFNγ genes in RNA data:", length(ifn_gamma_genes), "\n")
+cat("IFNα genes in protein data:", sum(ifn_alpha_genes %in% colnames(protein_mat)), "\n")
+cat("IFNγ genes in protein data:", sum(ifn_gamma_genes %in% colnames(protein_mat)), "\n")
+
+
+
+
+
+
+# 11.4a. Score calculation function
+
+
+calc_ifn_score <- function(gene_set, label) {
+
+  # RNA score
+  rna_score <- full_vsd %>%
+    filter(gene_symbol %in% gene_set) %>%
+    pivot_longer(cols=-c(gene, gene_symbol), names_to="sample_name", values_to="expr") %>%
+    group_by(gene_symbol) %>%
+    mutate(expr_scaled = as.numeric(scale(expr))) %>%
+    ungroup() %>%
+    group_by(sample_name) %>%
+    summarize(IFN_score = mean(expr_scaled, na.rm=T), .groups="drop") %>%
+    mutate(modality = "RNA")
+
+  # Protein score
+  prot_genes_available <- intersect(gene_set, colnames(protein_mat)[-1])
+
+  prot_score <- protein_mat %>%
+    { colnames(.)[1] <- "patient_id"; . } %>%
+    mutate(patient_id = as.integer(patient_id)) %>%
+    pivot_longer(cols=-patient_id, names_to="gene_symbol", values_to="expr_log2") %>%
+    filter(gene_symbol %in% prot_genes_available) %>%
+    left_join(metadata_df_with_folds %>% dplyr::select(patient_id, sample_name), by="patient_id") %>%
+    group_by(gene_symbol) %>%
+    mutate(expr_scaled = as.numeric(scale(expr_log2))) %>%
+    ungroup() %>%
+    group_by(sample_name) %>%
+    summarize(IFN_score = mean(expr_scaled, na.rm=T), .groups="drop") %>%
+    mutate(modality = "Protein")
+
+  # Combine and add viral RPM + filter to Definite
+  bind_rows(rna_score, prot_score) %>%
+    left_join(viral_rpm_df %>% dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
+              by="sample_name") %>%
+    filter(LRTI_adjudication == "Definite") %>%
+    mutate(ifn_type = label)
+}
+
+ifn_alpha_df <- calc_ifn_score(ifn_alpha_genes, "IFNα")
+ifn_gamma_df <- calc_ifn_score(ifn_gamma_genes, "IFNγ")
+
+
+
+
+
+
+# 11.4b. Plot function
+
+
+plot_ifn_score <- function(score_df, ifn_label, filename) {
+
+  cor_df <- score_df %>%
+    group_by(modality) %>%
+    summarize(
+      pearson_r = cor.test(IFN_score, log10(viral_rpm + 1), method="pearson")$estimate,
+      .groups="drop"
+    ) %>%
+    mutate(y_pos = case_when(
+      modality == "RNA"     ~ min(score_df$IFN_score, na.rm=T) + 0.3,
+      modality == "Protein" ~ min(score_df$IFN_score, na.rm=T) + 0.1
+    ))
+
+  interaction_p <- summary(lm(
+    IFN_score ~ log10(viral_rpm + 1) * as.character(modality),
+    data = score_df
+  ))$coefficients["log10(viral_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"]
+
+  p <- ggplot(score_df, aes(x=log10(viral_rpm + 1), y=IFN_score, color=modality)) +
+    geom_point(alpha=0.7, size=1.8) +
+    geom_smooth(method="lm", se=TRUE, alpha=0.15) +
+    geom_hline(yintercept=0, linetype="dashed", color="grey40") +
+    geom_text(
+      data = cor_df,
+      aes(x=max(log10(score_df$viral_rpm + 1)) * 0.98, y=y_pos,
+          label=paste0(modality, ": r = ", round(pearson_r, 2))),
+      inherit.aes=FALSE, size=4, hjust=1
+    ) +
+    annotate("text",
+      x = max(log10(score_df$viral_rpm + 1)) * 0.98,
+      y = min(score_df$IFN_score, na.rm=T) - 0.1,
+      label = paste0("Interaction p = ", signif(interaction_p, 3)),
+      size=4, hjust=1
+    ) +
+    scale_color_manual(values=omics_colors) +
+    theme_classic() +
+    theme(text=element_text(family="Helvetica")) +
+    labs(
+      x = expression(log[10]~"Viral RPM (+1)"),
+      y = paste0("Composite ", ifn_label, " score (z-score)"),
+      title = paste0("Viral Load vs Composite ", ifn_label, " Response"),
+      subtitle = paste0("Hallmark ", ifn_label, " pathway (RNA and protein)")
+    )
+
+  print(p)
+  ggsave(file.path(results_dir, filename), plot=p, width=7, height=5)
+}
+
+
+
+plot_ifn_score(ifn_alpha_df, "IFNα", "Composite_IFNalpha_score_vs_Viral_RPM.pdf")
+
+plot_ifn_score(ifn_gamma_df, "IFNγ", "Composite_IFNgamma_score_vs_Viral_RPM.pdf")
+
+
 
 
 
 
 ```
+
+
+
+

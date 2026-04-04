@@ -61,7 +61,7 @@ full_vsd <- full_vsd %>%
 # 12.2 Prepare RNA/Protein concordance for selected genes
 
 
-genes_to_plot <- c("FABP4", "ISG15", "IFIT2", "IFIT3", "APOE", "SLAMF7")
+genes_to_plot <- c("FABP4", "ISG15", "IFIT2", "IFIT3", "APOE", "SLAMF7", "OLAH")
 
 for (selected_gene in genes_to_plot) {
 
@@ -156,6 +156,7 @@ for (selected_gene in genes_to_plot) {
 
 
 
+
 # 12.4 Scatter plot RNA vs Protein by adjudication
 
 
@@ -182,7 +183,7 @@ for (selected_gene in genes_to_plot) {
       values_to = "expr"
     ) %>%
     mutate(expr_scaled_protein = as.numeric(scale(expr))) 
-
+  
   # Merge
   gene_concordance <- metadata_df %>%
     mutate(patient_id = as.character(patient_id)) %>%
@@ -212,10 +213,18 @@ for (selected_gene in genes_to_plot) {
   
   r_definite   <- round(pearson_definite$estimate, 2)
   r_noevidence <- round(pearson_noevidence$estimate, 2)
+  
 
+  # p value 
+  interaction_p <- summary(lm(
+    expr_scaled_protein ~ expr_scaled_rna * as.character(LRTI_adjudication),
+    data = gene_concordance))$coefficients["expr_scaled_rna:as.character(LRTI_adjudication)No Evidence", "Pr(>|t|)"]
+  
+  
   label_text <- paste0(
     "Definite  r = ", r_definite, "\n",
-    "No Evidence  r = ", r_noevidence
+    "No Evidence  r = ", r_noevidence, "\n",
+    "p value = ", round(interaction_p, 4)
   )
 
   p <- ggplot(gene_concordance,aes(

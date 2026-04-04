@@ -1,0 +1,182 @@
+---
+title: "13-correlation_density_plot"
+output: 
+  html_notebook:
+    toc: true
+---
+
+```{r}
+
+
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(ggplot2)
+
+
+
+
+
+
+# 13.1 Import Data
+
+
+data_dir    <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+
+# Gene matrix
+full_vsd <- read.csv(
+  file.path(data_dir, "vst_full.csv"),
+  stringsAsFactors=F, check.names=F, row.names=1)
+
+full_vsd <- full_vsd %>%
+  rownames_to_column("gene") %>%
+  mutate(
+    gene_symbol = ensg2gene[gene],
+    gene_symbol = ifelse(is.na(gene_symbol), gene, gene_symbol))
+
+# Protein matrix
+protein_mat <- read.csv(
+  file.path(
+    "C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv"),
+  stringsAsFactors=F, check.names=F)
+
+# LASSO fold coefs: gene workflow
+lasso_coefs_gene <- read.csv(
+  file.path(results_dir, "lasso_fold_coefs.csv"),
+  stringsAsFactors=F)
+
+# LASSO fold coefs: protein workflow
+lasso_coefs_prot <- read.csv(
+  file.path(
+    "C:/Users/User/Documents/UCSF/BREATH2.Prot/results/lasso_fold_coefs.csv"),
+  stringsAsFactors=F)
+
+# Metadata
+metadata_df <- read.csv(
+  file.path(data_dir, "metadata_df_with_folds.csv"),
+  stringsAsFactors=F)
+
+
+
+
+
+
+# 13.2 Find shared analytes
+
+
+# Shared analytes
+shared_genes <- intersect(full_vsd$gene_symbol, colnames(protein_mat)[-1])
+
+cat("Shared analytes:", length(shared_genes), "\n")
+
+
+
+
+
+
+# 13.3 Compute per-analyte Pearson r
+
+
+cor_per_gene <- full_vsd %>%
+  filter(gene_symbol %in% shared_genes) %>%
+  pivot_longer(cols=-c(gene, gene_symbol), names_to="sample_name", values_to="expr_rna") %>%
+  inner_join(metadata_df %>% dplyr::select(sample_name, patient_id), by="sample_name") %>%
+  inner_join(
+    protein_mat %>% { colnames(.)[1] <- "patient_id"; . } %>%
+      mutate(patient_id = as.integer(patient_id)) %>%
+      pivot_longer(cols=-patient_id, names_to="gene_symbol", values_to="expr_protein") %>%
+      filter(gene_symbol %in% shared_genes),
+    by = c("patient_id", "gene_symbol")
+  ) %>%
+  group_by(gene_symbol) %>%
+  summarize(pearson_r = cor(expr_rna, expr_protein, method="pearson", use="complete.obs"),
+            .groups="drop")
+
+summary(cor_per_gene$pearson_r)
+
+
+
+
+
+
+# 13.4 Density plot of per-analyte Pearson r
+
+genes_biomarker <- c("FABP4", "ISG15", "IFIT2", "IFIT3", "APOE", "SLAMF7")
+genes_lasso <- unique(c(lasso_coefs_gene$gene_symbol, lasso_coefs_prot$protein))
+
+cor_per_gene <- cor_per_gene %>%
+  mutate(
+    category = case_when(
+      gene_symbol %in% genes_biomarker ~ "Biomarker",
+      gene_symbol %in% genes_lasso     ~ "LASSO-selected",
+      TRUE                             ~ "Background"
+    )
+  )
+
+genes_highlight <- cor_per_gene %>% filter(category != "Background")
+genes_label     <- cor_per_gene %>% filter(category == "Biomarker")
+
+ggplot(cor_per_gene, aes(x = pearson_r)) +
+  geom_density(fill = "#4C72B0", alpha = 0.3, color = "#4C72B0") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_vline(
+    xintercept = median(cor_per_gene$pearson_r),
+    linetype = "solid", color = "grey20", linewidth = 0.7
+  ) +
+  # LASSO-selected rug ticks
+  geom_rug(
+    data = genes_highlight %>% filter(category == "LASSO-selected"),
+    aes(x = pearson_r),
+    color = "#E69F00", linewidth = 0.7, length = unit(0.05, "npc")
+  ) +
+  # Biomarker rug ticks
+  geom_rug(
+    data = genes_highlight %>% filter(category == "Biomarker"),
+    aes(x = pearson_r),
+    color = "red", linewidth = 0.9, length = unit(0.07, "npc")
+  ) +
+  # Biomarker labels rotated above rug
+  geom_text(
+    data = genes_label,
+    aes(x = pearson_r, y = 0.15, label = gene_symbol),
+    angle = 90, hjust = 0, size = 3, color = "red", fontface = "bold"
+  ) +
+  annotate("text",
+    x = median(cor_per_gene$pearson_r) + 0.02,
+    y = Inf,
+    label = paste0("Median r = ", round(median(cor_per_gene$pearson_r), 3)),
+    hjust = 0, vjust = 1.5, size = 3.5, fontface = "bold"
+  ) +
+  scale_x_continuous(limits = c(-0.5, 0.9), breaks = seq(-0.4, 0.8, 0.2)) +
+  scale_color_identity() +
+  labs(
+    title = "RNA-Protein Concordance Across Shared Analytes",
+    subtitle = paste0(
+      "n = ", nrow(cor_per_gene), " shared analytes | ",
+      "orange = LASSO-selected | red = 6 biomarker genes"
+    ),
+    x = "Pearson r (RNA vs Protein)",
+    y = "Density"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    text = element_text(family = "Helvetica", face = "bold"),
+    axis.text = element_text(face = "bold")
+  )
+
+ggsave(
+  file.path(results_dir, "correlation_density_plot.pdf"),
+  width = 7, height = 5
+)
+
+
+cat("LASSO genes that are also biomarkers:", 
+    sum(genes_lasso %in% genes_biomarker), "\n")
+cat("LASSO genes in shared analytes:",
+    sum(genes_lasso %in% cor_per_gene$gene_symbol), "\n")
+
+
+```
+

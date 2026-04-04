@@ -45,6 +45,14 @@ lasso_fold_coefs <- read.csv(
   file.path(results_dir, "lasso_fold_coefs.csv"), 
   stringsAsFactors=F)
 
+lasso_fold_coefs_n3 <- read.csv(
+  file.path(results_dir, "lasso_fold_coefs_n3.csv"),
+  stringsAsFactors=F)
+
+lasso_fold_coefs_n1 <- read.csv(
+  file.path(results_dir, "lasso_fold_coefs_n1.csv"),
+  stringsAsFactors=F)
+
 selected_lasso_coefs <- lasso_fold_coefs
 
 
@@ -110,10 +118,12 @@ rf_preds <- cv_list %>%
   by = "patient_id") %>%
     dplyr::relocate(LRTI_adjudication, .after = patient_id)
 
-# Save RF predictions
+# Save RF predictions (change csv file output depending on lambda used)
 write.csv(rf_preds, 
           file.path(results_dir, "lassoRF_preds.csv"),
           row.names=F)
+
+
 
 
 
@@ -129,7 +139,8 @@ rf_votes <- cv_list %>%
     as.data.frame(x$mod$votes) %>%
       tibble::rownames_to_column("patient_id") %>%
       mutate(test_fold = x$test_fold) %>%
-      rename(pred = Definite) %>%
+      mutate(pred = .data[["Definite"]]) %>%
+      dplyr::select(-`No Evidence`) %>%
       dplyr::select(test_fold, patient_id, pred)
   }) %>%
   bind_rows() %>%

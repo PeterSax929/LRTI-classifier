@@ -29,7 +29,7 @@ patient_info_with_folds <- read.csv(
   file.path(data_dir, "patient_info_with_folds.csv"),
   stringsAsFactors=F)
 
-# Import out-of-fold predictions
+# Import out-of-fold predictions (import csv based on lambda used)
 lassoRF_preds <- read.csv(
   file.path(results_dir, "lassoRF_preds.csv"),
   stringsAsFactors=F)

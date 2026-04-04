@@ -41,8 +41,16 @@ lasso_fold_coefs <- read.csv(
   file.path(results_dir, "lasso_fold_coefs.csv"), 
   stringsAsFactors=F)
 
+lasso_fold_coefs_n3 <- read.csv(
+  file.path(results_dir, "lasso_fold_coefs_n3.csv"),
+  stringsAsFactors=F)
+
+lasso_fold_coefs_n1 <- read.csv(
+  file.path(results_dir, "lasso_fold_coefs_n1.csv"),
+  stringsAsFactors=F)
+
 # Use lasso_fold_coefs as selected genes
-selected_lasso_coefs <- lasso_fold_coefs
+selected_lasso_coefs <- lasso_fold_coefs_n1
 
 
 
@@ -124,9 +132,9 @@ rf_preds <- cv_list %>%
   ) %>%
   dplyr::relocate(LRTI_adjudication, .after = sample_name)
 
-# Save RF predictions
+# Save RF predictions (change file to target lambda)
 write.csv(rf_preds, 
-          file.path(results_dir, "lassoRF_preds.csv"),
+          file.path(results_dir, "lassoRF_preds_n1.csv"),
           row.names=F)
 
 

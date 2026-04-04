@@ -206,13 +206,19 @@ combined_preds <- metadata_df_with_folds %>%
 
 
 
-# 5.5a. Plot
+# 5.5a. Plot2
 
 combined_preds <- combined_preds %>%
   mutate(
     switched = (pred_gene >= 0.5) != (pred_prot >= 0.5),
     LRTI_adjudication = factor(LRTI_adjudication, levels = c("Definite", "No Evidence"))
   )
+
+# Switched patient ids
+switched_patients <- combined_preds %>%
+  filter(switched) %>%
+  dplyr::select(sample_name, patient_id, LRTI_adjudication, pred_gene, pred_prot) %>%
+  arrange(LRTI_adjudication, desc(abs(pred_gene - pred_prot)))
 
 ggplot(combined_preds) +
   # Non-switcher lines
@@ -270,6 +276,10 @@ ggsave(
   file.path(results_dir, "gene_vs_protein_pred_shift.pdf"),
   width = 7, height = 5
 )
+
+write.csv(switched_patients,
+  file.path(results_dir, "switched_patients.csv"),
+  row.names=F)
 
 
 
