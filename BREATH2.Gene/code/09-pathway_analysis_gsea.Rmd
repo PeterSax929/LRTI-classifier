@@ -253,15 +253,15 @@ p_hallmark_top16 <- ggplot(
   geom_segment(
     aes(x = 0, xend = NES, yend = Description),
     linewidth = 0.7,
-    color = "grey60"
+    color = "grey50"
   ) +
   # Color by direction
     geom_point(
     aes(fill = Direction),
-    shape = 21,          # allows fill + outline
-    size = 4,
-    color = "black",     # black border
-    stroke = 1.2         # thickness of border
+    shape = 21,
+    size = 5,
+    color = "black",
+    stroke = 1.6
   ) +
   scale_fill_manual(
     values = c(
@@ -275,19 +275,22 @@ p_hallmark_top16 <- ggplot(
     ),
     name = NULL
   ) +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 14, base_family = "Helvetica") +
   theme(
-    legend.direction = "vertical",   
-    legend.justification = "left",
-    legend.position = "bottom",
-    legend.text = element_text(size = 11),
-    legend.key.width = unit(1.2, "lines"),
-    # Center title across entire figure
-    plot.title.position = "plot",
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    plot.subtitle = element_text(hjust = 0.5),
-    # Add right margin so labels don't clip
-    plot.margin = ggplot2::margin(t = 10, r = 40, b = 10, l = 10)
+    legend.position      = "bottom",
+    legend.direction     = "horizontal",
+    legend.justification = "center",
+    legend.text          = element_text(size = 11, face = "bold"),
+    legend.title         = element_blank(),
+    legend.key.size      = unit(1.4, "lines"),
+    axis.text.y          = element_text(size = 9,  face = "bold", color = "black"),
+    axis.text.x          = element_text(size = 11, face = "bold", color = "black"),
+    axis.title.x         = element_text(size = 12, face = "bold"),
+    plot.title           = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle        = element_text(hjust = 0.5, size = 10, color = "grey30"),
+    plot.title.position  = "plot",
+    plot.margin          = ggplot2::margin(t = 10, r = 40, b = 10, l = 10),
+    panel.grid.major.x   = element_line(color = "grey92", linewidth = 0.4)
   ) +
   labs(
     title = "Hallmark Pathway Enrichment (GSEA)",
@@ -303,10 +306,12 @@ p_hallmark_top16
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "GSEA_Hallmark_pathways.pdf"),
-  plot = p_hallmark_top16,
-  width = 8,
-  height = 6
+  filename    = file.path(results_dir, "GSEA_Hallmark_pathways.pdf"),
+  plot        = p_hallmark_top16,
+  width       = 8,
+  height      = 6,
+  device      = "pdf",
+  useDingbats = FALSE
 )
 
 
@@ -358,21 +363,15 @@ p_reactome_top16 <- ggplot(
   geom_segment(
     aes(x = 0, xend = NES, yend = Description),
     linewidth = 0.7,
-    color = "grey60"
-  ) +
-  # Filled points
-  geom_point(
-    aes(fill = Direction),
-    shape = 21,
-    size = 4
+    color = "grey50"
   ) +
   # Black outline
   geom_point(
+    aes(fill = Direction),
     shape = 21,
-    size = 4,
-    fill = NA,
+    size = 5,
     color = "black",
-    stroke = 1.2
+    stroke = 1.6
   ) +
   scale_fill_manual(
   values = c(
@@ -387,21 +386,22 @@ p_reactome_top16 <- ggplot(
   name = NULL
   ) +
   # Styling
-  theme_classic(base_size = 12) +
+   theme_classic(base_size = 14, base_family = "Helvetica") +
   theme(
-    legend.position = "bottom",
-    legend.direction = "vertical",
-    legend.justification = "left",
-    legend.text = element_text(size = 11),
-    legend.key.width = unit(1.2, "lines"),
-
-    axis.text.y = element_text(size = 9),  # smaller font
-    # Center title across entire figure
-    plot.title.position = "plot",
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    plot.subtitle = element_text(hjust = 0.5),
-    # Add right margin so labels don't clip
-    plot.margin = ggplot2::margin(t = 10, r = 40, b = 10, l = 10)
+    legend.position      = "bottom",
+    legend.direction     = "horizontal",
+    legend.justification = "center",
+    legend.text          = element_text(size = 11, face = "bold"),
+    legend.title         = element_blank(),
+    legend.key.size      = unit(1.4, "lines"),
+    axis.text.y          = element_text(size = 8,  face = "bold", color = "black"),
+    axis.text.x          = element_text(size = 11, face = "bold", color = "black"),
+    axis.title.x         = element_text(size = 12, face = "bold"),
+    plot.title           = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle        = element_text(hjust = 0.5, size = 10, color = "grey30"),
+    plot.title.position  = "plot",
+    plot.margin          = ggplot2::margin(t = 10, r = 40, b = 10, l = 10),
+    panel.grid.major.x   = element_line(color = "grey92", linewidth = 0.4)
     ) +
   labs(
     title = "Reactome Pathway Enrichment (GSEA)",
@@ -416,10 +416,12 @@ p_reactome_top16
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "GSEA_Reactome_pathways.pdf"),
-  plot = p_reactome_top16,
-  width = 8,
-  height = 8
+  filename    = file.path(results_dir, "GSEA_Reactome_pathways.pdf"),
+  plot        = p_reactome_top16,
+  width       = 8,
+  height      = 8,
+  device      = "pdf",
+  useDingbats = FALSE
 )
 
 
@@ -554,7 +556,7 @@ p_compare <- ggplot(
   geom_segment(
     aes(x = 0, xend = NES, yend = Description),
     linewidth = 0.55,
-    color = "grey75"
+    color = "grey50"
   ) +
   # Points: filled if significant, hollow if not
   geom_point(
@@ -563,8 +565,8 @@ p_compare <- ggplot(
       color = Omics
     ),
     shape = 21,
-    size = 4.2,
-    stroke = 1.2
+    size = 5,
+    stroke = 1.6
   ) +
   scale_fill_manual(
     values = c(
@@ -575,18 +577,26 @@ p_compare <- ggplot(
     guide = "none"   
   ) +
   scale_color_manual(values = omics_colors) +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 14, base_family = "Helvetica") +
   theme(
-    axis.text.y = element_text(size = 9),
-    plot.title.position = "plot",
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    plot.subtitle = element_text(hjust = 0.5),
-    legend.position = "top",
-    plot.margin = ggplot2::margin(t = 8, r = 20, b = 8, l = 10)
+    legend.position      = "bottom",
+    legend.direction     = "horizontal",
+    legend.justification = "center",
+    legend.text          = element_text(size = 11, face = "bold"),
+    legend.title         = element_text(size = 12, face = "bold"),
+    legend.key.size      = unit(1.4, "lines"),
+    axis.text.y          = element_text(size = 9,  face = "bold", color = "black"),
+    axis.text.x          = element_text(size = 11, face = "bold", color = "black"),
+    axis.title.x         = element_text(size = 12, face = "bold"),
+    plot.title           = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle        = element_text(hjust = 0.5, size = 10, color = "grey30"),
+    plot.title.position  = "plot",
+    plot.margin          = ggplot2::margin(t = 8, r = 20, b = 8, l = 10),
+    panel.grid.major.x   = element_line(color = "grey92", linewidth = 0.4)
   ) +
   labs(
     title = "Hallmark Pathway Enrichment: RNA vs Protein",
-    subtitle = "Top pathways ranked by combined |NES|\nFilled = padj < 0.05",
+    subtitle = expression("Top pathways ranked by combined |NES| — Filled = P"[adj]*" < 0.05"),
     x = "Normalized Enrichment Score (NES)",
     y = NULL,
     color = "Omics layer"
@@ -598,10 +608,12 @@ p_compare
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "GSEA_Hallmark_RNA_vs_Protein.pdf"),
-  plot = p_compare,
-  width = 8,
-  height = 7
+  filename    = file.path(results_dir, "GSEA_Hallmark_RNA_vs_Protein.pdf"),
+  plot        = p_compare,
+  width       = 8,
+  height      = 7,
+  device      = "pdf",
+  useDingbats = FALSE
 )
 
 

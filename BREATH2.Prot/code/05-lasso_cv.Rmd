@@ -165,7 +165,7 @@ all(rownames(X) == patient_info_with_folds$patient_id) # Should return TRUE
 
 
 # Set target number of proteins (e.g. 1 or 3)
-target_n <- 3
+target_n <- 1
 
 lasso_cv_fixed_n <- function(test_fold) {
   set.seed(8634782 + test_fold)

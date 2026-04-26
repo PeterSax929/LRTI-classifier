@@ -50,7 +50,15 @@ lasso_fold_coefs_n1 <- read.csv(
   stringsAsFactors=F)
 
 # Use lasso_fold_coefs as selected genes
-selected_lasso_coefs <- lasso_fold_coefs_n1
+selected_lasso_coefs <- lasso_fold_coefs
+
+# Single biomarker override — change protein name here
+#selected_lasso_coefs <- data.frame(
+  #gene_symbol = rep("ISG15", max(metadata_df_with_folds$fold)),
+  #gene        = rep("ENSG00000187608", max(metadata_df_with_folds$fold)),
+  #coef        = NA,
+  #fold        = 1:max(metadata_df_with_folds$fold)
+ #)
 
 
 
@@ -134,7 +142,7 @@ rf_preds <- cv_list %>%
 
 # Save RF predictions (change file to target lambda)
 write.csv(rf_preds, 
-          file.path(results_dir, "lassoRF_preds_n1.csv"),
+          file.path(results_dir, "lassoRF_preds.csv"),
           row.names=F)
 
 

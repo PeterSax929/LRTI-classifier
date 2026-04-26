@@ -29,6 +29,10 @@ metadata_df_with_folds <- read.csv(
   file.path(data_dir, "metadata_df_with_folds.csv"),
   stringsAsFactors=F)
 
+patient_info_with_folds <- read.csv(
+  file.path(
+  "C:/Users/User/Documents/UCSF/BREATH2.Prot/data/patient_info_with_folds.csv"), stringsAsFactors=F)
+
 # Import out-of-fold predictions
 lassoRF_preds_gene <- read.csv(
   file.path(results_dir, "lassoRF_preds.csv"),
@@ -39,6 +43,12 @@ lassoRF_preds_prot <- read.csv(
   file.path(
   "C:/Users/User/Documents/UCSF/BREATH2.Prot/results/lassoRF_preds.csv"),
   stringsAsFactors=F)
+
+# Merge protein fold assignments
+lassoRF_preds_prot <- lassoRF_preds_prot %>%
+  left_join(
+    patient_info_with_folds %>% dplyr::select(patient_id, fold),
+    by = "patient_id")
 
 # Ensure consistent factor levels
 lassoRF_preds_gene$LRTI_adjudication <- factor(
@@ -257,7 +267,9 @@ ggplot(combined_preds) +
   facet_wrap(~ LRTI_adjudication, ncol = 2) +
   labs(
     title = "Classifier Prediction Shift: Gene vs. Protein Workflow",
-    subtitle = "Dark lines = patients who switched classification at 0.5 threshold",
+    subtitle = paste0(
+  "Dark lines = patients who switched classification at 0.5 threshold (n = ",
+  sum(combined_preds$switched),")"),
     x = NULL,
     y = "RF predicted P(LRTI)",
     color = "LRTI adjudication"
@@ -281,6 +293,154 @@ write.csv(switched_patients,
   file.path(results_dir, "switched_patients.csv"),
   row.names=F)
 
+
+
+
+
+
+
+
+
+# 5.6. Late Integration — Logistic Regression on Gene + Protein Probabilities
+
+# Apply logit transformation to both probability streams
+# Regularize away from 0/1 first (same approach as JCI paper equation 2)
+n_trees <- 10000
+epsilon <- 1 / n_trees
+
+combined_preds_logit <- combined_preds %>%
+  mutate(
+    pred_gene_reg  = pmax(pmin(pred_gene, 1 - epsilon), epsilon),
+    pred_prot_reg  = pmax(pmin(pred_prot, 1 - epsilon), epsilon),
+    logit_gene     = log(pred_gene_reg / (1 - pred_gene_reg)),
+    logit_prot     = log(pred_prot_reg / (1 - pred_prot_reg)),
+    y              = as.integer(LRTI_adjudication == "Definite")
+  ) %>%
+  inner_join(metadata_df_with_folds %>% dplyr::select(sample_name, fold),
+             by = "sample_name")
+
+# Fit integrated logistic regression per fold (train on 4 folds, predict on 1)
+integrated_preds <- lapply(1:max(combined_preds_logit$fold), function(f) {
+
+  train_df <- combined_preds_logit %>% filter(fold != f)
+  test_df  <- combined_preds_logit %>% filter(fold == f)
+
+  # Fit logistic regression on training folds
+  logit_fit <- glm(
+    y ~ logit_gene + logit_prot,
+    data   = train_df,
+    family = binomial
+  )
+
+  # Predict on test fold
+  data.frame(
+    sample_name       = test_df$sample_name,
+    LRTI_adjudication = test_df$LRTI_adjudication,
+    pred              = predict(logit_fit, newdata=test_df, type="response"),
+    fold              = f
+  )
+}) %>%
+  bind_rows()
+
+# Compute AUC
+auc_integrated <- output_auc_roc(integrated_preds, "integrated")
+
+# DeLong CI for integrated model
+ci_integrated <- pROC::ci.auc(
+  pROC::roc(
+    response  = factor(integrated_preds$LRTI_adjudication,
+                       levels = c("No Evidence", "Definite")),
+    predictor = integrated_preds$pred,
+    direction = "<"
+  ),
+  conf.level = 0.95
+)
+
+message("Integrated AUC: ", round(as.numeric(ci_integrated[2]), 3),
+        " (95% CI: ", round(ci_integrated[1], 3),
+        "–", round(ci_integrated[3], 3), ")")
+
+# Compute protein AUC using same fold-wise method as gene
+auc_prot <- output_auc_roc(lassoRF_preds_prot, "lassoRF_prot")
+
+ci_prot <- pROC::ci.auc(
+  pROC::roc(
+    response  = factor(lassoRF_preds_prot$LRTI_adjudication,
+                       levels = c("No Evidence", "Definite")),
+    predictor = lassoRF_preds_prot$pred,
+    direction = "<"
+  ),
+  conf.level = 0.95
+)
+
+message("Protein AUC: ", round(as.numeric(ci_prot[2]), 3),
+        " (95% CI: ", round(ci_prot[1], 3),
+        "–", round(ci_prot[3], 3), ")")
+
+# Compare all three models side by side
+auc_comparison <- data.frame(
+  model     = c("Gene", "Protein", "Integrated"),
+  auc       = c(mean_auc,        as.numeric(ci_prot[2]),  as.numeric(ci_integrated[2])),
+  auc_lower = c(lower_auc,       ci_prot[1],              ci_integrated[1]),
+  auc_upper = c(upper_auc,       ci_prot[3],              ci_integrated[3])
+)
+
+print(auc_comparison)
+
+
+
+
+
+
+# 5.7. DeLong Pairwise AUC Comparisons
+
+
+# Build ROC objects on same 105 patients — must be aligned by sample_name
+response <- factor(
+  combined_preds$LRTI_adjudication,
+  levels = c("No Evidence", "Definite")
+)
+
+roc_gene <- pROC::roc(
+  response  = response,
+  predictor = combined_preds$pred_gene,
+  direction = "<"
+)
+
+roc_prot <- pROC::roc(
+  response  = response,
+  predictor = combined_preds$pred_prot,
+  direction = "<"
+)
+
+roc_integrated <- pROC::roc(
+  response  = response,
+  predictor = integrated_preds$pred[match(
+    combined_preds$sample_name,
+    integrated_preds$sample_name)],
+  direction = "<"
+)
+
+# Pairwise DeLong tests
+delong_gene_vs_prot       <- pROC::roc.test(roc_gene, roc_prot,       method="delong")
+delong_gene_vs_integrated <- pROC::roc.test(roc_gene, roc_integrated, method="delong")
+delong_prot_vs_integrated <- pROC::roc.test(roc_prot, roc_integrated, method="delong")
+
+# Summary table
+delong_results <- data.frame(
+  comparison  = c("Gene vs Protein", "Gene vs Integrated", "Protein vs Integrated"),
+  auc_1       = round(c(as.numeric(roc_gene$auc), as.numeric(roc_gene$auc), as.numeric(roc_prot$auc)), 3),
+  auc_2       = round(c(as.numeric(roc_prot$auc), as.numeric(roc_integrated$auc), as.numeric(roc_integrated$auc)), 3),
+  z_statistic = round(c(delong_gene_vs_prot$statistic, delong_gene_vs_integrated$statistic, delong_prot_vs_integrated$statistic), 3),
+  p_value     = signif(c(delong_gene_vs_prot$p.value, delong_gene_vs_integrated$p.value, delong_prot_vs_integrated$p.value), 2),
+  significant = c(delong_gene_vs_prot$p.value, delong_gene_vs_integrated$p.value, delong_prot_vs_integrated$p.value) < 0.05
+)
+
+print(delong_results)
+
+write.csv(delong_results,
+  file.path(results_dir, "delong_auc_comparisons.csv"),
+  row.names=F)
 
 
 

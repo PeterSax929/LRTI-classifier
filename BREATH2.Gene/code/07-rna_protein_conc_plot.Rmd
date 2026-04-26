@@ -72,7 +72,12 @@ merged_df <- merged_df %>%
       padj_protein < 0.05 ~ "Protein only",
       TRUE ~ "Not Significant")) %>%
   mutate(
-    point_size = ifelse(sig_class == "RNA & Protein", 2.2, 1.1))
+    point_size = case_when(
+      sig_class == "RNA & Protein" ~ 2.5,
+      sig_class == "RNA only"      ~ 1.4,
+      sig_class == "Protein only"  ~ 1.4,
+      TRUE                         ~ 0.8
+    ))
 
   merged_df$sig_class <- factor(
   merged_df$sig_class,
@@ -151,7 +156,9 @@ ggplot(
   merged_df,
   aes(x = log2FC_RNA, y = log2FC_protein, color = sig_class)
   ) +
-  geom_point(aes(size = point_size), alpha = 0.6) +
+  geom_point(aes(size = point_size),
+    alpha = ifelse(merged_df$sig_class == "Not Significant", 0.3, 0.75)
+    ) +
   scale_size_identity() +
   geom_smooth(
   data = merged_df %>% filter(sig_class == "RNA & Protein"),
@@ -167,10 +174,12 @@ ggplot(
   geom_text_repel(
   data = label_df,
   aes(label = gene_symbol),
-  size = 3,
-  box.padding = 0.4,
-  segment.color = "grey70",
-  max.overlaps = 20,
+  size = 3.2,
+  fontface = "bold",
+  box.padding = 0.5,
+  segment.color = "grey50",
+  segment.size = 0.3,
+  max.overlaps = 25,
   show.legend = FALSE
   ) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey60") +
@@ -181,24 +190,38 @@ ggplot(
     "Protein only" = "#55A868",
     "Not Significant" = "grey85")
     ) +
-  theme_minimal(base_size = 12, base_family = "Helvetica") +
+  theme_classic(base_size = 13, base_family = "Helvetica") +
   labs(
   x = expression(log[2]*FC: (Transcriptome)),
   y = expression(log[2]*FC: (Proteome)),
   title = "RNA–Protein Concordance of LRTI-Associated Features",
   subtitle = paste0(
-    "All features: Spearman \u03C1 = ", round(cor_spearman, 2),
-    " | Jointly significant: \u03C1 = ",
+    "All features: Spearman p = ", round(cor_spearman, 2),
+    " | Jointly significant: p = ",
     round(cor_spearman_both, 2),
     " (n = ", sum(merged_df$sig_class == "RNA & Protein"), ")"
   ),
   color = "Significance"
-)
-
-ggsave(file.path(results_dir, "RNA_protein_LFC_concordance.pdf"),
-  width = 7,
-  height = 6
+  ) +
+  theme(
+    axis.text     = element_text(face="bold", color="black"),
+    axis.title    = element_text(face="bold"),
+    plot.title    = element_text(hjust=0.5, face="bold"),
+    plot.subtitle = element_text(hjust=0.5, size=10, color="grey30"),
+    legend.position  = "bottom",
+    legend.direction = "horizontal",
+    legend.title  = element_text(face="bold"),
+    legend.text   = element_text(face="bold"),
+    legend.key.size = unit(1.2, "lines")
   )
+
+ggsave(
+  file.path(results_dir, "RNA_protein_LFC_concordance.pdf"),
+  width       = 7,
+  height      = 6,
+  device      = "pdf",
+  useDingbats = FALSE
+)
 
 write.xlsx(merged_df,
            file.path(results_dir, "lfc_rna_protein_concordance.xlsx"))

@@ -116,12 +116,12 @@ res_df <- res_df %>%
 
 # Volcano Plot
 ggplot(res_df, aes(x = log2FoldChange, y = negLog10P)) +
-  geom_point(aes(color = direction), alpha = 0.6) +
+  geom_point(aes(color = direction), alpha = 0.65, size = 1.6) +
   scale_color_manual(
     values = c(
       "Definite" = "red",
       "NoEvidence" = "blue",
-      "NotSignificant" = "grey85"
+      "NotSignificant" = "grey80"
     ),
     breaks = c("Definite","NoEvidence"),
     labels = c(
@@ -130,7 +130,8 @@ ggplot(res_df, aes(x = log2FoldChange, y = negLog10P)) +
     ),
     name = NULL
   ) +
-  geom_hline(yintercept = -log10(0.05), linetype="dashed") +
+  geom_hline(
+    yintercept = -log10(0.05), linetype="dashed", linewidth=0.6, color="grey40") +
   theme_minimal(base_size = 14, base_family = "Helvetica") +
   theme(
     legend.position = "bottom",
@@ -142,17 +143,23 @@ ggplot(res_df, aes(x = log2FoldChange, y = negLog10P)) +
     x = expression(log[2]*FC),
     y = expression(-log[10](P[adj])),
     title = "Volcano plot - Proteomics Differential Abundance",
-    caption = paste("Differentially expressed proteins:", sum(res_df$sig))
+    caption = 
+      paste0("Differentially abundant proteins (FDR < 0.05): ", sum(res_df$sig))
   ) +
-  coord_fixed(ratio = 0.3) +
+  coord_fixed(ratio = 0.5) +
   geom_text_repel(
-    data = bind_rows(
-      res_df %>% filter(direction == "Definite") %>% slice_min(padj, n=10),
-      res_df %>% filter(direction == "NoEvidence") %>% slice_min(padj, n=10)
-    ),
-    aes(label = gene),
-    size = 3,
-    max.overlaps = 30
+  data = bind_rows(
+    res_df %>% filter(direction == "Definite") %>% slice_min(padj, n=10),
+    res_df %>% filter(direction == "NoEvidence") %>% slice_min(padj, n=10)
+  ),
+  aes(label = gene),
+    size = 3.2,
+    fontface = "bold",
+    max.overlaps = Inf,
+    box.padding = 0.5,
+    point.padding = 0.3,
+    segment.color = "grey60",
+    segment.size = 0.3
   )
 
 # Save results

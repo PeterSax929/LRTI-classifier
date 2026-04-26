@@ -1,0 +1,106 @@
+"patient_id","LRTI_adjudication","pred"
+"1029713","No Evidence",0
+"1036760","Definite",0.9589
+"1037041","Definite",0.1281
+"1037465","Definite",1
+"1037929","No Evidence",0.2358
+"1038111","Definite",3e-04
+"1038237","Definite",0.9998
+"1038363","No Evidence",0.9865
+"1038572","No Evidence",0.0109
+"1039501","No Evidence",0.0119
+"1039815","Definite",0.9589
+"1040202","Definite",1
+"1040253","Definite",0.8878
+"1041018","Definite",1
+"1042126","Definite",0.9999
+"1042248","Definite",0.7322
+"1046096","Definite",0.9641
+"1046244","No Evidence",0.266
+"1046408","Definite",1
+"1047963","No Evidence",0
+"1048063","Definite",0.9878
+"1048897","Definite",0.9875
+"1030846","Definite",0.7602
+"1035754","No Evidence",0.228
+"1036820","Definite",0.9999
+"1037914","No Evidence",0.3615
+"1038134","Definite",1
+"1038325","No Evidence",0.3629
+"1038385","Definite",1
+"1039073","Definite",1
+"1040001","No Evidence",1
+"1040644","Definite",0.7681
+"1040831","Definite",1
+"1043273","No Evidence",0.2316
+"1044367","Definite",0.0115
+"1045173","Definite",0.0115
+"1045787","No Evidence",0.0123
+"1046274","Definite",0.7681
+"1047433","Definite",0.7681
+"1048039","Definite",1
+"1048262","No Evidence",0.1354
+"1049050","Definite",0.7605
+"1049211","Definite",0.9987
+"1050020","Definite",1
+"1029433","Definite",1
+"1031599","No Evidence",0.9644
+"1037463","Definite",1
+"1037715","Definite",0.3657
+"1038088","Definite",1
+"1038460","No Evidence",0.3674
+"1038522","Definite",1
+"1038626","Definite",1
+"1038972","Definite",0.9997
+"1039467","Definite",0.9973
+"1039847","No Evidence",1e-04
+"1041101","Definite",1
+"1041537","Definite",0.9549
+"1043274","No Evidence",0.9848
+"1043806","No Evidence",1e-04
+"1043986","No Evidence",0.9849
+"1046991","Definite",0.9584
+"1047103","Definite",1
+"1047399","Definite",1
+"1047464","No Evidence",0.6263
+"1047479","Definite",1
+"1028330","Definite",1
+"1028513","Definite",0.0047
+"1028901","Definite",0.953
+"1030071","No Evidence",0.1131
+"1036576","Definite",0.3665
+"1036592","Definite",0.9958
+"1036793","Definite",0.9955
+"1038017","Definite",1
+"1038574","Definite",1
+"1038853","Definite",0.9004
+"1039024","No Evidence",0.3123
+"1039086","No Evidence",0
+"1039597","Definite",0.7242
+"1039906","Definite",0.9669
+"1041666","No Evidence",0.9598
+"1042351","Definite",1
+"1042726","No Evidence",0.2829
+"1045378","No Evidence",0.989
+"1046843","Definite",0.3623
+"1048263","Definite",1
+"1027440","Definite",0.1268
+"1029999","Definite",0.9997
+"1030069","Definite",1
+"1031961","No Evidence",0.0454
+"1036236","Definite",0.97
+"1036315","No Evidence",0
+"1036343","No Evidence",0.9088
+"1036430","Definite",0.9892
+"1036803","Definite",1
+"1037642","Definite",1
+"1038457","Definite",0.9899
+"1040356","Definite",0.9683
+"1040777","Definite",1
+"1041169","No Evidence",0.0855
+"1043215","No Evidence",1e-04
+"1044647","Definite",0.6742
+"1046750","Definite",0.3358
+"1047141","No Evidence",0.0042
+"1047591","Definite",0.6742
+"1049867","Definite",0.9683

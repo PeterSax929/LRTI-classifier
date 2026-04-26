@@ -111,7 +111,7 @@ output_auc_roc <- function(preds_df, output_suffix) {
 # 7.3. Plot Graph
 
 
-# Run AUC computation and PDF creation
+# Run AUC computation
 auc_lassoRF <- output_auc_roc(merged_preds, "lassoRF")
 
 max_fold <- max(auc_lassoRF$fold)

@@ -1,0 +1,4 @@
+"comparison","auc_1","auc_2","z_statistic","p_value","significant"
+"Gene vs Protein",0.86,0.793,1.348,0.18,FALSE
+"Gene vs Integrated",0.86,0.873,-0.685,0.49,FALSE
+"Protein vs Integrated",0.793,0.873,-2.019,0.043,TRUE

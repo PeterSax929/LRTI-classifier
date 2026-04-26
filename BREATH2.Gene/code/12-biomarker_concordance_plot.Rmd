@@ -108,6 +108,7 @@ for (selected_gene in genes_to_plot) {
   )
 
   pearson_r <- round(pearson_res$estimate, 2)
+  pearson_p   <- signif(pearson_res$p.value, 2)
 
   p <- ggplot(gene_concordance, aes(
     x = expr_scaled_rna, y = expr_scaled_protein)) +
@@ -116,7 +117,7 @@ for (selected_gene in genes_to_plot) {
             color="grey30", fill="grey70", alpha=0.2) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
-    theme_classic(base_size = 12) +
+    theme_classic(base_size = 13, base_family = "Helvetica") +
     labs(
       title = paste(selected_gene, "RNA/Protein Concordance"),
       subtitle = "Each point = one patient (n=105)",
@@ -125,28 +126,38 @@ for (selected_gene in genes_to_plot) {
     ) +
     annotate(
       "text",
-      x = min(gene_concordance$expr_scaled_rna, na.rm=T),
-      y = max(gene_concordance$expr_scaled_protein, na.rm=T) + 0.2,
-      label = paste0("Pearson r = ", pearson_r),
+      x = max(gene_concordance$expr_scaled_rna, na.rm=T) + 0.25,
+      y = max(gene_concordance$expr_scaled_protein, na.rm=T),
+      label = paste0("r = ", pearson_r, "\np = ", pearson_p),
       hjust = 0,
       vjust = 1,
-      size = 4
+      size = 3.5,
+      lineheight = 1.2
     ) +
-    theme(text = element_text(family = "Helvetica")) +
+    theme(
+      axis.text    = element_text(face = "bold", color = "black"),
+      axis.title   = element_text(face = "bold"),
+      plot.title   = element_text(hjust = 0.5, face = "bold"),
+      plot.subtitle = element_text(hjust = 0.5, color = "grey30"),
+      plot.margin  = ggplot2::margin(t=10, r=110, b=10, l=10)
+    ) +
     coord_cartesian(
       xlim = c(min(gene_concordance$expr_scaled_rna, na.rm=T) - 0.2,
                max(gene_concordance$expr_scaled_rna, na.rm=T) + 0.2),
       ylim = c(min(gene_concordance$expr_scaled_protein, na.rm=T) - 0.2,
-               max(gene_concordance$expr_scaled_protein, na.rm=T) + 0.2)
-  )
+               max(gene_concordance$expr_scaled_protein, na.rm=T) + 0.2),
+      clip = "off"
+    )
 
   print(p)
 
-  ggsave(
+   ggsave(
     file.path(results_dir, paste0(selected_gene, "_RNA_vs_Protein_concordance.pdf")),
-    plot = p,
-    width = 6,
-    height = 5
+    plot        = p,
+    width       = 7,
+    height      = 5,
+    device      = "pdf",
+    useDingbats = FALSE
   )
 
 }
@@ -214,6 +225,14 @@ for (selected_gene in genes_to_plot) {
   r_definite   <- round(pearson_definite$estimate, 2)
   r_noevidence <- round(pearson_noevidence$estimate, 2)
   
+  # BH correction across the 2 group-wise tests
+  p_vals_adj <- p.adjust(
+    c(pearson_definite$p.value, pearson_noevidence$p.value),
+    method = "BH"
+  )
+  padj_definite   <- signif(p_vals_adj[1], 2)
+  padj_noevidence <- signif(p_vals_adj[2], 2)
+  
 
   # p value 
   interaction_p <- summary(lm(
@@ -222,9 +241,9 @@ for (selected_gene in genes_to_plot) {
   
   
   label_text <- paste0(
-    "Definite  r = ", r_definite, "\n",
-    "No Evidence  r = ", r_noevidence, "\n",
-    "p value = ", round(interaction_p, 4)
+    "Definite: r = ", r_definite, ", Padj = ", padj_definite, "\n",
+    "No Evidence: r = ", r_noevidence, ", Padj = ", padj_noevidence, "\n",
+    "Interaction p = ", signif(interaction_p, 2)
   )
 
   p <- ggplot(gene_concordance,aes(
@@ -238,7 +257,7 @@ for (selected_gene in genes_to_plot) {
       "Definite" = "red",
       "No Evidence" = "#0072B2"
     )) +
-    theme_classic(base_size = 12) +
+    theme_classic(base_size = 13, base_family = "Helvetica") +
     labs(
       title = paste(selected_gene, "RNA/Protein Concordance"),
       subtitle = "Colored by LRTI adjudication (72 Definite, 33 No Evidence)",
@@ -248,19 +267,31 @@ for (selected_gene in genes_to_plot) {
     ) +
     annotate(
       "text",
-      x = min(gene_concordance$expr_scaled_rna, na.rm = TRUE),
-      y = max(gene_concordance$expr_scaled_protein, na.rm = TRUE),
+      x = max(gene_concordance$expr_scaled_rna, na.rm=TRUE) + 0.25,
+      y = max(gene_concordance$expr_scaled_protein, na.rm=TRUE),
       label = label_text,
       hjust = 0,
       vjust = 1,
-      size = 3
+      size = 3,
+      lineheight = 1.2
     ) +
-    theme(text = element_text(family = "Helvetica")) +
+    theme(
+      axis.text    = element_text(face = "bold", color = "black"),
+      axis.title   = element_text(face = "bold"),
+      plot.title   = element_text(hjust = 0.5, face = "bold"),
+      plot.subtitle = element_text(hjust = 0.5, color = "grey30"),
+      legend.position  = "bottom",
+      legend.direction = "horizontal",
+      legend.text  = element_text(face = "bold"),
+      legend.title = element_text(face = "bold"),
+      plot.margin  = ggplot2::margin(t=10, r=150, b=10, l=10)
+    ) +
     coord_cartesian(
       xlim = c(min(gene_concordance$expr_scaled_rna, na.rm = TRUE) - 0.2,
                max(gene_concordance$expr_scaled_rna, na.rm = TRUE) + 0.2),
       ylim = c(min(gene_concordance$expr_scaled_protein, na.rm = TRUE) - 0.2,
-               max(gene_concordance$expr_scaled_protein, na.rm = TRUE) + 0.2)
+               max(gene_concordance$expr_scaled_protein, na.rm = TRUE) + 0.2),
+      clip = "off"
     )
 
   print(p)
@@ -268,9 +299,11 @@ for (selected_gene in genes_to_plot) {
   ggsave(
     file.path(results_dir,
     paste0(selected_gene,"_RNA_vs_Protein_concordance_by_adjudication.pdf")),
-    plot = p,
-    width = 6,
-    height = 5
+    plot        = p,
+    width       = 7,
+    height      = 5,
+    device      = "pdf",
+    useDingbats = FALSE
   )
 
 }

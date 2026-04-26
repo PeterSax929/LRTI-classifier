@@ -118,7 +118,7 @@ ggplot(
     segment.color = "grey70"
   ) +
   coord_cartesian(
-    xlim = c(min_x, 18),
+    xlim = c(min_x, 15),
     ylim = c(min_x, 18)
   ) +
   theme_classic() +
@@ -144,4 +144,4 @@ ggsave(
 
 
 
-```
+``` 

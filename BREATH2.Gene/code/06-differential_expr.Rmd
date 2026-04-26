@@ -176,12 +176,12 @@ top_labels <- bind_rows(top_definite, top_noEvidence)
 
 
 ggplot(res_df, aes(x=log2FoldChange, y=negLog10P)) +
-  geom_point(aes(color=direction), alpha=0.6) +
+  geom_point(aes(color=direction), alpha=0.65, size=1.6) +
   scale_color_manual(
     values=c(
-      "Definite"="red",
-      "NoEvidence"="blue",
-      "NotSignificant"="grey85"
+  "Definite"="red",
+  "NoEvidence"="blue",
+  "NotSignificant"="grey80"
     ),
     breaks=c("Definite","NoEvidence"),
     labels=c(
@@ -190,7 +190,9 @@ ggplot(res_df, aes(x=log2FoldChange, y=negLog10P)) +
     ),
     name=NULL
   ) +
-  geom_hline(yintercept=-log10(0.05), linetype="dashed") +
+  geom_hline(
+    yintercept=-log10(0.05), linetype="dashed", linewidth=0.6, color="grey40"
+    ) +
   theme_minimal(base_size = 14, base_family = "Helvetica") +
   theme(
     legend.position="bottom",
@@ -207,14 +209,20 @@ ggplot(res_df, aes(x=log2FoldChange, y=negLog10P)) +
     x=expression(log[2]*FC),
     y=expression(-log[10](P[adj])),
     title="Volcano plot - host counts (limma-voom)",
-    caption=paste("Differentially expressed genes:", sum(res_df$sig))
+    caption=
+      paste0("Differentially expressed genes (FDR < 0.05): ", sum(res_df$sig))
   ) +
   coord_fixed(ratio=0.6) +
   geom_text_repel(
     data=top_labels,
     aes(label=gene_symbol),
-    size=3,
-    max.overlaps=30
+    size=3.2,
+    fontface="bold",
+    max.overlaps=Inf,
+    box.padding=0.5,
+    point.padding=0.3,
+    segment.color="grey60",
+    segment.size=0.3
   )
 
 # Save results
