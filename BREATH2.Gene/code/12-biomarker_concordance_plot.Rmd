@@ -79,7 +79,12 @@ genes_to_plot <- c(
   "APOE",
   "SLAMF7",
   "OLAH",
-  "SDF2L1"
+  "SDF2L1",
+  "GLRX",
+  "FAH",
+  "C1QC",
+  "SCIMP",
+  "APOC1"
 )
 
 
