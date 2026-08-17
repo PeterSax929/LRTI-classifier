@@ -262,11 +262,11 @@ p_hallmark_top16 <- ggplot(
     size = 5,
     color = "black",
     stroke = 1.6
-  ) +
+  ) + 
   scale_fill_manual(
     values = c(
-      "Up" = "red3",
-      "Down" = "blue3"
+      "Up" = "#D55E00",
+      "Down" = "#8B4789"
     ),
     breaks = c("Up", "Down"),  # ensures Up appears first
     labels = c(
@@ -375,8 +375,8 @@ p_reactome_top16 <- ggplot(
   ) +
   scale_fill_manual(
   values = c(
-    "Up" = "red3",
-    "Down" = "blue3"
+    "Up" = "#D55E00",
+    "Down" = "#8B4789"
   ),
   breaks = c("Up", "Down"),
   labels = c(
@@ -490,7 +490,7 @@ hallmark_compare_df <- full_join(
 
 hallmark_to_plot <- hallmark_compare_df %>%
   arrange(desc(combined_abs_NES)) %>%
-  slice_head(n = 16)
+  slice_head(n = 20)
 
 hallmark_to_plot %>%
   dplyr::select(
@@ -513,7 +513,8 @@ plot_df <- hallmark_to_plot %>%
   dplyr::select(
     ID, Description,
     NES_rna, padj_rna,
-    NES_prot, padj_prot
+    NES_prot, padj_prot,
+    combined_abs_NES
   ) %>%
   pivot_longer(
     cols = c(NES_rna, NES_prot),
@@ -523,18 +524,24 @@ plot_df <- hallmark_to_plot %>%
   mutate(
     padj = ifelse(Omics == "NES_rna", padj_rna, padj_prot),
     Omics = ifelse(Omics == "NES_rna", "RNA", "Protein"),
-
-    # Significance flag 
     Significant = padj < 0.05,
-
-    # Clean pathway names
     Description = str_wrap(
-  gsub("_", " ",
-       gsub("^HALLMARK_", "", Description)), width = 40))
-
+      tools::toTitleCase(
+        tolower(
+          gsub("_", " ",
+            gsub("^HALLMARK_", "", Description)
+          )
+        )
+      ),
+      width = 40
+    ),
+    Description = reorder(Description, combined_abs_NES)
+  )
+  
+  
 omics_colors <- c(
-  "RNA" = "#4C72B0",      # muted blue
-  "Protein" = "#55A868"  # muted green
+  "RNA" = "#0072B2",
+  "Protein" = "#009E73"
 )
 
 
@@ -542,78 +549,210 @@ omics_colors <- c(
 
 
 
-# 9.9c. Dot plot
+# 9.9c. RNA vs protein pathway enrichment plot
 
 
 p_compare <- ggplot(
   plot_df,
-  aes(y = Description, x = NES)
-  ) +
+  aes(
+    y = Description,
+    x = NES
+  )
+) +
+
   # Center line
-  geom_vline(xintercept = 0, linewidth = 0.8, color = "black"
+  geom_vline(
+    xintercept = 0,
+    linewidth = 0.5,
+    color = "grey60"
   ) +
+
   # Stems
   geom_segment(
-    aes(x = 0, xend = NES, yend = Description),
+    aes(
+      x = 0,
+      xend = NES,
+      yend = Description
+    ),
     linewidth = 0.55,
-    color = "grey50"
+    color = "grey75"
   ) +
-  # Points: filled if significant, hollow if not
+
+  # Points
+  # Filled = significant
+  # Hollow = not significant
   geom_point(
     aes(
-      fill  = ifelse(Significant, Omics, "NotSig"),
+      fill = ifelse(Significant, Omics, "NotSig"),
       color = Omics
     ),
     shape = 21,
-    size = 5,
-    stroke = 1.6
+    size = 5.0,
+    stroke = 1.4
   ) +
+
+  # Fill indicates pathway significance
   scale_fill_manual(
     values = c(
-      "RNA"     = "#4C72B0",
-      "Protein" = "#55A868",
-      "NotSig"  = "white"
+      "RNA" = "#0072B2",
+      "Protein" = "#009E73",
+      "NotSig" = "white"
     ),
-    guide = "none"   
+    breaks = c(
+      "RNA",
+      "Protein",
+      "NotSig"
+    ),
+    labels = c(
+      "RNA",
+      "Protein",
+      "Not significant"
+    ),
+    name = "Pathway significance",
+    guide = guide_legend(
+      override.aes = list(
+        color = c(
+          "#0072B2",
+          "#009E73",
+          "grey60"
+        ),
+        stroke = 1.4,
+        shape = 21
+      )
+    )
   ) +
-  scale_color_manual(values = omics_colors) +
-  theme_classic(base_size = 14, base_family = "Helvetica") +
+
+  # Color identifies omics modality
+  scale_color_manual(
+    values = c(
+      "RNA" = "#0072B2",
+      "Protein" = "#009E73"
+    ),
+    guide = "none"
+  ) +
+
+  # Manuscript styling
+  theme_classic(
+    base_size = 12,
+    base_family = "Arial"
+  ) +
+
   theme(
-    legend.position      = "bottom",
-    legend.direction     = "horizontal",
-    legend.justification = "center",
-    legend.text          = element_text(size = 11, face = "bold"),
-    legend.title         = element_text(size = 12, face = "bold"),
-    legend.key.size      = unit(1.4, "lines"),
-    axis.text.y          = element_text(size = 9,  face = "bold", color = "black"),
-    axis.text.x          = element_text(size = 11, face = "bold", color = "black"),
-    axis.title.x         = element_text(size = 12, face = "bold"),
-    plot.title           = element_text(hjust = 0.5, face = "bold", size = 14),
-    plot.subtitle        = element_text(hjust = 0.5, size = 10, color = "grey30"),
-    plot.title.position  = "plot",
-    plot.margin          = ggplot2::margin(t = 8, r = 20, b = 8, l = 10),
-    panel.grid.major.x   = element_line(color = "grey92", linewidth = 0.4)
+    text = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain"
+    ),
+
+    axis.text.y = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      colour = "black"
+    ),
+
+    axis.text.x = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      colour = "black"
+    ),
+
+    axis.title.x = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      colour = "black"
+    ),
+
+    axis.title.y = element_blank(),
+
+    axis.line = element_line(
+      colour = "black",
+      linewidth = 0.5
+    ),
+
+    plot.title = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      colour = "black",
+      hjust = 0.5
+    ),
+
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.justification = "left",
+    legend.box = "vertical",
+
+    legend.title = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      colour = "black"
+    ),
+
+    legend.text = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      colour = "black"
+    ),
+
+    legend.key.size = unit(
+      1.2,
+      "lines"
+    ),
+
+    plot.margin = margin(
+      10,
+      20,
+      10,
+      10
+    ),
+
+    panel.grid.major.x = element_line(
+      color = "grey92",
+      linewidth = 0.4
+    )
   ) +
+
   labs(
-    title = "Hallmark Pathway Enrichment: RNA vs Protein",
-    subtitle = expression("Top pathways ranked by combined |NES| — Filled = P"[adj]*" < 0.05"),
+    title = "RNA vs protein pathway enrichment",
     x = "Normalized Enrichment Score (NES)",
-    y = NULL,
-    color = "Omics layer"
+    y = NULL
   ) +
-  xlim(-2.5, 4.5)
+
+  xlim(
+    -2.5,
+    4.5
+  )
+
 
 # Print plot
 p_compare
 
-# Save plot
+
+# Save editable vector PDF
 ggsave(
-  filename    = file.path(results_dir, "GSEA_Hallmark_RNA_vs_Protein.pdf"),
-  plot        = p_compare,
-  width       = 8,
-  height      = 7,
-  device      = "pdf",
-  useDingbats = FALSE
+  filename = file.path(
+    results_dir,
+    "GSEA_Hallmark_RNA_vs_Protein.pdf"
+  ),
+  plot = p_compare,
+  width = 8,
+  height = 8,
+  device = cairo_pdf,
+  bg = "white"
+)
+
+# Save plot object for patchwork
+saveRDS(
+  p_compare,
+  file.path(
+    results_dir,
+    "GSEA_Hallmark_RNA_vs_Protein.rds"
+  )
 )
 
 

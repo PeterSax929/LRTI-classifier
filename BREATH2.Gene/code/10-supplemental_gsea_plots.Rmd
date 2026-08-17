@@ -62,169 +62,57 @@ gsea_hallmark <- GSEA(
 
 
 
-# 10.2. Hallmark IL6 JAK STAT3 Signaling
+# 10.2. Supplemental Hallmark Pathways
 
 
-p_il6_jak <- gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_IL6_JAK_STAT3_SIGNALING",
-  title = "Hallmark IL6 JAK STAT3 Signaling",
-  base_size = 12,
-  subplots = c(1, 2, 3))
-
-p_il6_jak
-
-ggsave(
-  file.path(results_dir, "GSEA_Hallmark_IL6_JAK_STAT3.pdf"),
-  plot = p_il6_jak,
-  width = 7,
-  height = 6
+pathways <- c(
+  "HALLMARK_IL6_JAK_STAT3_SIGNALING",
+  "HALLMARK_INFLAMMATORY_RESPONSE",
+  "HALLMARK_ALLOGRAFT_REJECTION",
+  "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+  "HALLMARK_APOPTOSIS",
+  "HALLMARK_IL2_STAT5_SIGNALING",
+  "HALLMARK_COMPLEMENT"
 )
 
 
-
-
-
-
-
-# 10.3. Hallmark Inflammatory Response
-
-
-p_inflam <- gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_INFLAMMATORY_RESPONSE",
-  title = "Hallmark Inflammatory Response",
-  base_size = 12,
-  subplots = c(1, 2, 3))
-
-p_inflam
-
-ggsave(
-  file.path(results_dir, "GSEA_Hallmark_Inflammatory_Response.pdf"),
-  plot = p_inflam,
-  width = 7,
-  height = 6
+pathway_titles <- c(
+  "Hallmark IL6 JAK STAT3 Signaling",
+  "Hallmark Inflammatory Response",
+  "Hallmark Allograft Rejection",
+  "Hallmark TNFA Signaling via NFKB",
+  "Hallmark Apoptosis",
+  "Hallmark IL2 STAT5 Signaling",
+  "Hallmark Complement"
 )
 
 
+for (i in seq_along(pathways)) {
 
+  p <- gseaplot2(
+    gsea_hallmark,
+    geneSetID = pathways[i],
+    title = pathway_titles[i],
+    base_size = 12,
+    subplots = c(1, 2, 3)
+  )
 
+  print(p)
 
-
-# 10.4. Hallmark Allograft Rejection
-
-
-p_allograft <- gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_ALLOGRAFT_REJECTION",
-  title = "Hallmark Allograft Rejection",
-  base_size = 12,
-  subplots = c(1, 2, 3))
-
-p_allograft
-
-ggsave(
-  file.path(results_dir, "GSEA_Hallmark_Allograft_Rejection.pdf"),
-  plot = p_allograft,
-  width = 7,
-  height = 6
-)
-
-
-
-
-
-
-# 10.5. Hallmark TNFA Signaling via NFKB
-
-
-p_tnfa_nfkb <- gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
-  title = "Hallmark TNFA Signaling via NFKB",
-  base_size = 12,
-  subplots = c(1, 2, 3))
-
-p_tnfa_nfkb
-
-ggsave(
-  file.path(results_dir, "GSEA_Hallmark_TNFA_NFKB.pdf"),
-  plot = p_tnfa_nfkb,
-  width = 7,
-  height = 6
-)
-
-
-
-
-
-
-# 10.6. Hallmark Apoptosis
-
-
-p_apoptosis <- gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_APOPTOSIS",
-  title = "Hallmark Apoptosis",
-  base_size = 12,
-  subplots = c(1, 2, 3))
-
-p_apoptosis
-
-ggsave(
-  file.path(results_dir, "GSEA_Hallmark_Apoptosis.pdf"),
-  plot = p_apoptosis,
-  width = 7,
-  height = 6
-)
-
-
-
-
-
-
-# 10.7. Hallmark IL2 STAT5 Signaling
-
-
-p_il2_stat5 <- gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_IL2_STAT5_SIGNALING",
-  title = "Hallmark IL2 STAT5 Signaling",
-  base_size = 12,
-  subplots = c(1, 2, 3))
-
-p_il2_stat5
-
-ggsave(
-  file.path(results_dir, "GSEA_Hallmark_IL2_STAT5.pdf"),
-  plot = p_il2_stat5,
-  width = 7,
-  height = 6
-)
-
-
-
-
-
-
-# 10.8. Hallmark Complement
-
-
-p_complement <- gseaplot2(
-  gsea_hallmark,
-  geneSetID = "HALLMARK_COMPLEMENT",
-  title = "Hallmark Complement",
-  base_size = 12,
-  subplots = c(1, 2, 3))
-  
-p_complement
-
-ggsave(
-  file.path(results_dir, "GSEA_Hallmark_Complement.pdf"),
-  plot = p_complement,
-  width = 7,
-  height = 6
-)
+  ggsave(
+    file.path(
+      results_dir,
+      paste0(
+        "GSEA_",
+        pathways[i],
+        ".pdf"
+      )
+    ),
+    plot = p,
+    width = 7,
+    height = 6
+  )
+}
 
 
 
@@ -232,3 +120,5 @@ ggsave(
 
 
 ```
+
+

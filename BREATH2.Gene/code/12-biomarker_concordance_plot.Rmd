@@ -5,7 +5,7 @@ output:
     toc: true
 ---
 
-```{r, warning=F, message=F}
+```{r, warning=F}
 
 
 library(dplyr)
@@ -26,32 +26,42 @@ raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
 metadata_df <- read.csv(
-  file.path(data_dir, "metadata_df_with_folds.csv"), 
-  stringsAsFactors=F)
+  file.path(data_dir, "metadata_df_with_folds.csv"),
+  stringsAsFactors=F
+)
 
-# Protein matrix
 protein_mat <- read.csv(
-  file.path("C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv"),
-  stringsAsFactors=F, check.names=F)
+  file.path(
+    "C:/Users/User/Documents/UCSF/BREATH2.Prot/data",
+    "protein_mat.csv"
+  ),
+  stringsAsFactors=F,
+  check.names=F
+)
 
-# Gene matrix
 full_vsd <- read.csv(
   file.path(data_dir, "vst_full.csv"),
-  stringsAsFactors=F, check.names=F)
+  stringsAsFactors=F,
+  check.names=F
+)
 
-full_vsd <- full_vsd %>%
- { colnames(.)[1] <- "gene"; . }
+colnames(full_vsd)[1] <- "gene"
 
-# Map ENSG to gene symbols
 ensg2gene <- read.csv(
   file.path(raw_data_dir, "host_gene_counts.csv"),
-  stringsAsFactors=F) %>%
-  { `names<-`(.$gene_symbol, .$X) }
+  stringsAsFactors=F
+) %>%
+  { setNames(.$gene_symbol, .$X) }
 
 full_vsd <- full_vsd %>%
   mutate(
     gene_symbol = ensg2gene[gene],
-    gene_symbol = ifelse(is.na(gene_symbol), gene, gene_symbol))
+    gene_symbol = ifelse(
+      is.na(gene_symbol),
+      gene,
+      gene_symbol
+    )
+  )
 
 
 
@@ -61,117 +71,24 @@ full_vsd <- full_vsd %>%
 # 12.2 Prepare RNA/Protein concordance for selected genes
 
 
-genes_to_plot <- c("FABP4", "ISG15", "IFIT2", "IFIT3", "APOE", "SLAMF7", "OLAH")
-
-for (selected_gene in genes_to_plot) {
-
-  # RNA: select and scale
-  rna_gene_long <- full_vsd %>%
-    filter(gene_symbol == selected_gene) %>%
-    pivot_longer(
-      cols = -c(gene, gene_symbol),
-      names_to = "sample_name",
-      values_to = "expr"
-    ) %>%
-    mutate(expr_scaled_rna = as.numeric(scale(expr)))
-
-  # Protein: select and scale
-  protein_gene_long <- protein_mat %>%
-    { colnames(.)[1] <- "patient_id"; . } %>%
-    mutate(patient_id = as.character(patient_id)) %>%
-    dplyr::select(patient_id, all_of(selected_gene)) %>%
-    pivot_longer(
-      cols = -patient_id,
-      names_to = "gene_symbol",
-      values_to = "expr"
-    ) %>%
-    mutate(expr_scaled_protein = as.numeric(scale(expr))) 
-
-  # Merge RNA & protein via metadata
-  gene_concordance <- metadata_df %>%
-    mutate(patient_id = as.character(patient_id)) %>%
-    left_join(rna_gene_long, by = "sample_name") %>%
-    left_join(protein_gene_long, by = c("patient_id", "gene_symbol"))
+genes_to_plot <- c(
+  "FABP4",
+  "ISG15",
+  "IFIT2",
+  "IFIT3",
+  "APOE",
+  "SLAMF7",
+  "OLAH",
+  "SDF2L1"
+)
 
 
-
-
-
-
-# 12.3 Scatter plot RNA vs Protein for selected gene
-
-  # Pearson
-  pearson_res <- cor.test(
-    gene_concordance$expr_scaled_rna,
-    gene_concordance$expr_scaled_protein,
-    method = "pearson"
-  )
-
-  pearson_r <- round(pearson_res$estimate, 2)
-  pearson_p   <- signif(pearson_res$p.value, 2)
-
-  p <- ggplot(gene_concordance, aes(
-    x = expr_scaled_rna, y = expr_scaled_protein)) +
-    geom_point(size = 2, alpha = 0.7, color = "#4C72B0") +
-    geom_smooth(method="lm", se=TRUE,
-            color="grey30", fill="grey70", alpha=0.2) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
-    theme_classic(base_size = 13, base_family = "Helvetica") +
-    labs(
-      title = paste(selected_gene, "RNA/Protein Concordance"),
-      subtitle = "Each point = one patient (n=105)",
-      x = "RNA expression (z-score)",
-      y = "Protein expression (z-score)"
-    ) +
-    annotate(
-      "text",
-      x = max(gene_concordance$expr_scaled_rna, na.rm=T) + 0.25,
-      y = max(gene_concordance$expr_scaled_protein, na.rm=T),
-      label = paste0("r = ", pearson_r, "\np = ", pearson_p),
-      hjust = 0,
-      vjust = 1,
-      size = 3.5,
-      lineheight = 1.2
-    ) +
-    theme(
-      axis.text    = element_text(face = "bold", color = "black"),
-      axis.title   = element_text(face = "bold"),
-      plot.title   = element_text(hjust = 0.5, face = "bold"),
-      plot.subtitle = element_text(hjust = 0.5, color = "grey30"),
-      plot.margin  = ggplot2::margin(t=10, r=110, b=10, l=10)
-    ) +
-    coord_cartesian(
-      xlim = c(min(gene_concordance$expr_scaled_rna, na.rm=T) - 0.2,
-               max(gene_concordance$expr_scaled_rna, na.rm=T) + 0.2),
-      ylim = c(min(gene_concordance$expr_scaled_protein, na.rm=T) - 0.2,
-               max(gene_concordance$expr_scaled_protein, na.rm=T) + 0.2),
-      clip = "off"
-    )
-
-  print(p)
-
-   ggsave(
-    file.path(results_dir, paste0(selected_gene, "_RNA_vs_Protein_concordance.pdf")),
-    plot        = p,
-    width       = 7,
-    height      = 5,
-    device      = "pdf",
-    useDingbats = FALSE
-  )
-
-}
-
-
-
-
-
-
-
-# 12.4 Scatter plot RNA vs Protein by adjudication
-
-
-for (selected_gene in genes_to_plot) {
+prepare_gene_concordance <- function(
+  selected_gene,
+  full_vsd,
+  protein_mat,
+  metadata_df
+) {
 
   # RNA
   rna_gene_long <- full_vsd %>%
@@ -181,129 +98,211 @@ for (selected_gene in genes_to_plot) {
       names_to = "sample_name",
       values_to = "expr"
     ) %>%
-    mutate(expr_scaled_rna = as.numeric(scale(expr)))
+    mutate(
+      expr_scaled_rna = as.numeric(scale(expr))
+    )
 
   # Protein
   protein_gene_long <- protein_mat %>%
     { colnames(.)[1] <- "patient_id"; . } %>%
-    mutate(patient_id = as.character(patient_id)) %>%
-    dplyr::select(patient_id, all_of(selected_gene)) %>%
+    mutate(
+      patient_id = as.character(patient_id)
+    ) %>%
+    dplyr::select(
+      patient_id,
+      all_of(selected_gene)
+    ) %>%
     pivot_longer(
       cols = -patient_id,
       names_to = "gene_symbol",
       values_to = "expr"
     ) %>%
-    mutate(expr_scaled_protein = as.numeric(scale(expr))) 
-  
-  # Merge
-  gene_concordance <- metadata_df %>%
-    mutate(patient_id = as.character(patient_id)) %>%
-    left_join(rna_gene_long, by = "sample_name") %>%
-    left_join(protein_gene_long, by = c("patient_id", "gene_symbol"))
+    mutate(
+      expr_scaled_protein = as.numeric(scale(expr))
+    )
+
+  # Merge RNA, protein, and metadata
+  metadata_df %>%
+    mutate(
+      patient_id = as.character(patient_id),
+      LRTI_group = recode(
+        LRTI_adjudication,
+        "Definite" = "LRTI",
+        "No Evidence" = "Control"
+      )
+    ) %>%
+    left_join(
+      rna_gene_long,
+      by = "sample_name"
+    ) %>%
+    left_join(
+      protein_gene_long,
+      by = c("patient_id", "gene_symbol")
+    )
+}
 
 
 
 
 
 
-# 12.5 Scatter plot colored by adjudication
+# 12.3 Scatter plot RNA vs Protein for selected gene
 
 
-  # Spearman per group
-  pearson_definite <- cor.test(
-    gene_concordance$expr_scaled_rna[gene_concordance$LRTI_adjudication == "Definite"],
-    gene_concordance$expr_scaled_protein[gene_concordance$LRTI_adjudication == "Definite"],
+for (selected_gene in genes_to_plot) {
+
+  gene_concordance <- prepare_gene_concordance(
+    selected_gene,
+    full_vsd,
+    protein_mat,
+    metadata_df
+  )
+
+  # Pearson
+  pearson_res <- cor.test(
+    gene_concordance$expr_scaled_rna,
+    gene_concordance$expr_scaled_protein,
     method = "pearson"
   )
 
-  pearson_noevidence <- cor.test(
-    gene_concordance$expr_scaled_rna[gene_concordance$LRTI_adjudication == "No Evidence"],
-    gene_concordance$expr_scaled_protein[gene_concordance$LRTI_adjudication == "No Evidence"],
-    method = "pearson"
-  )
-  
-  r_definite   <- round(pearson_definite$estimate, 2)
-  r_noevidence <- round(pearson_noevidence$estimate, 2)
-  
-  # BH correction across the 2 group-wise tests
-  p_vals_adj <- p.adjust(
-    c(pearson_definite$p.value, pearson_noevidence$p.value),
-    method = "BH"
-  )
-  padj_definite   <- signif(p_vals_adj[1], 2)
-  padj_noevidence <- signif(p_vals_adj[2], 2)
-  
-
-  # p value 
-  interaction_p <- summary(lm(
-    expr_scaled_protein ~ expr_scaled_rna * as.character(LRTI_adjudication),
-    data = gene_concordance))$coefficients["expr_scaled_rna:as.character(LRTI_adjudication)No Evidence", "Pr(>|t|)"]
-  
-  
-  label_text <- paste0(
-    "Definite: r = ", r_definite, ", Padj = ", padj_definite, "\n",
-    "No Evidence: r = ", r_noevidence, ", Padj = ", padj_noevidence, "\n",
-    "Interaction p = ", signif(interaction_p, 2)
+  pearson_r <- round(
+    pearson_res$estimate,
+    2
   )
 
-  p <- ggplot(gene_concordance,aes(
-    x = expr_scaled_rna, y = expr_scaled_protein, color = LRTI_adjudication)
+  pearson_p <- signif(
+    pearson_res$p.value,
+    2
+  )
+
+
+# Scatter plot RNA vs Protein
+
+
+  p <- ggplot(
+    gene_concordance,
+    aes(
+      x = expr_scaled_rna,
+      y = expr_scaled_protein
+    )
+  ) +
+    geom_point(
+      size = 2,
+      alpha = 0.7,
+      color = "#0072B2"
     ) +
-    geom_point(size = 2, alpha = 0.8) +
-    geom_smooth(method="lm", se=FALSE) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
-    scale_color_manual(values = c(
-      "Definite" = "red",
-      "No Evidence" = "#0072B2"
-    )) +
-    theme_classic(base_size = 13, base_family = "Helvetica") +
+    geom_smooth(
+      method = "lm",
+      se = TRUE,
+      linewidth = 1.0,
+      color = "grey30",
+      fill = "grey70",
+      alpha = 0.25,
+      fullrange = TRUE
+    ) +
+    geom_hline(
+      yintercept = 0,
+      linetype = "dashed",
+      color = "grey40"
+    ) +
+    geom_vline(
+      xintercept = 0,
+      linetype = "dashed",
+      color = "grey40"
+    ) +
+    theme_classic(
+      base_size = 12,
+      base_family = "Arial"
+    ) +
     labs(
-      title = paste(selected_gene, "RNA/Protein Concordance"),
-      subtitle = "Colored by LRTI adjudication (72 Definite, 33 No Evidence)",
+      title = paste(
+        selected_gene,
+        "RNA/protein concordance"
+      ),
       x = "RNA expression (z-score)",
-      y = "Protein expression (z-score)",
-      color = "LRTI adjudication"
+      y = "Protein expression (z-score)"
     ) +
     annotate(
       "text",
-      x = max(gene_concordance$expr_scaled_rna, na.rm=TRUE) + 0.25,
-      y = max(gene_concordance$expr_scaled_protein, na.rm=TRUE),
-      label = label_text,
+      x = max(
+        gene_concordance$expr_scaled_rna,
+        na.rm=T
+      ) + 0.25,
+      y = max(
+        gene_concordance$expr_scaled_protein,
+        na.rm=T
+      ),
+      label = paste0(
+        "r = ", pearson_r,
+        "\np = ", pearson_p
+      ),
       hjust = 0,
       vjust = 1,
-      size = 3,
-      lineheight = 1.2
+      size = 3.5,
+      lineheight = 1.2,
+      family = "Arial"
     ) +
     theme(
-      axis.text    = element_text(face = "bold", color = "black"),
-      axis.title   = element_text(face = "bold"),
-      plot.title   = element_text(hjust = 0.5, face = "bold"),
-      plot.subtitle = element_text(hjust = 0.5, color = "grey30"),
-      legend.position  = "bottom",
-      legend.direction = "horizontal",
-      legend.text  = element_text(face = "bold"),
-      legend.title = element_text(face = "bold"),
-      plot.margin  = ggplot2::margin(t=10, r=150, b=10, l=10)
+      text = element_text(
+        family = "Arial",
+        size = 12
+      ),
+      axis.text = element_text(
+        color = "black"
+      ),
+      axis.title = element_text(
+        face = "plain"
+      ),
+      plot.title = element_text(
+        hjust = 0.5,
+        face = "plain",
+        size = 12
+      ),
+      plot.margin = ggplot2::margin(
+        t=10,
+        r=20,
+        b=10,
+        l=10
+      )
     ) +
     coord_cartesian(
-      xlim = c(min(gene_concordance$expr_scaled_rna, na.rm = TRUE) - 0.2,
-               max(gene_concordance$expr_scaled_rna, na.rm = TRUE) + 0.2),
-      ylim = c(min(gene_concordance$expr_scaled_protein, na.rm = TRUE) - 0.2,
-               max(gene_concordance$expr_scaled_protein, na.rm = TRUE) + 0.2),
+      xlim = c(
+        min(
+          gene_concordance$expr_scaled_rna,
+          na.rm=T
+        ) - 0.2,
+        max(
+          gene_concordance$expr_scaled_rna,
+          na.rm=T
+        ) + 0.2
+      ),
+      ylim = c(
+        min(
+          gene_concordance$expr_scaled_protein,
+          na.rm=T
+        ) - 0.2,
+        max(
+          gene_concordance$expr_scaled_protein,
+          na.rm=T
+        ) + 0.2
+      ),
       clip = "off"
     )
 
   print(p)
 
   ggsave(
-    file.path(results_dir,
-    paste0(selected_gene,"_RNA_vs_Protein_concordance_by_adjudication.pdf")),
-    plot        = p,
-    width       = 7,
-    height      = 5,
-    device      = "pdf",
-    useDingbats = FALSE
+    file.path(
+      results_dir,
+      paste0(
+        selected_gene,
+        "_RNA_vs_Protein_concordance.pdf"
+      )
+    ),
+    plot = p,
+    width = 6.5,
+    height = 6.5,
+    device = cairo_pdf
   )
 
 }
@@ -313,7 +312,268 @@ for (selected_gene in genes_to_plot) {
 
 
 
+# 12.4 Scatter plot RNA vs Protein by adjudication
+
+
+interaction_results <- data.frame(
+  Biomarker = character(),
+  Interaction_p = numeric(),
+  stringsAsFactors = FALSE
+)
+
+
+for (selected_gene in genes_to_plot) {
+
+  gene_concordance <- prepare_gene_concordance(
+    selected_gene,
+    full_vsd,
+    protein_mat,
+    metadata_df
+  )
+
+# Scatter plot colored by adjudication
+
+
+  # Pearson per group
+  pearson_definite <- cor.test(
+    gene_concordance$expr_scaled_rna[
+      gene_concordance$LRTI_adjudication == "Definite"
+    ],
+    gene_concordance$expr_scaled_protein[
+      gene_concordance$LRTI_adjudication == "Definite"
+    ],
+    method = "pearson"
+  )
+
+  pearson_noevidence <- cor.test(
+    gene_concordance$expr_scaled_rna[
+      gene_concordance$LRTI_adjudication == "No Evidence"
+    ],
+    gene_concordance$expr_scaled_protein[
+      gene_concordance$LRTI_adjudication == "No Evidence"
+    ],
+    method = "pearson"
+  )
+
+  r_definite <- round(
+    pearson_definite$estimate,
+    2
+  )
+
+  r_noevidence <- round(
+    pearson_noevidence$estimate,
+    2
+  )
+
+  # BH correction across the 2 group-wise tests
+  p_vals_adj <- p.adjust(
+    c(
+      pearson_definite$p.value,
+      pearson_noevidence$p.value
+    ),
+    method = "BH"
+  )
+
+  padj_definite <- signif(
+    p_vals_adj[1],
+    2
+  )
+
+  padj_noevidence <- signif(
+    p_vals_adj[2],
+    2
+  )
+
+  # p value
+  interaction_p <- summary(
+    lm(
+      expr_scaled_protein ~
+        expr_scaled_rna *
+        as.character(LRTI_adjudication),
+      data = gene_concordance
+    )
+  )$coefficients[
+    "expr_scaled_rna:as.character(LRTI_adjudication)No Evidence",
+    "Pr(>|t|)"
+  ]
+
+  interaction_results <- rbind(
+  interaction_results,
+  data.frame(
+    Biomarker = selected_gene,
+    Interaction_p = interaction_p,
+    stringsAsFactors = FALSE
+    )
+  )
+
+  label_text <- paste0(
+    "LRTI: r = ", r_definite, "\n",
+    "Control: r = ", r_noevidence
+  )
+
+
+# Scatter plot RNA vs Protein by adjudication
+
+
+  p <- ggplot(
+    gene_concordance,
+    aes(
+      x = expr_scaled_rna,
+      y = expr_scaled_protein,
+      color = LRTI_group
+    )
+  ) +
+    geom_point(
+      size = 2.5,
+      alpha = 0.85
+    ) +
+    geom_smooth(
+      method = "lm",
+      se = TRUE,
+      linewidth = 1.0,
+      alpha = 0.20,
+      fullrange = TRUE
+    ) +
+    geom_hline(
+      yintercept = 0,
+      linetype = "dashed",
+      color = "grey70"
+    ) +
+    geom_vline(
+      xintercept = 0,
+      linetype = "dashed",
+      color = "grey70"
+    ) +
+    scale_color_manual(
+      values = c(
+        "LRTI" = "#D55E00",
+        "Control" = "#8B4789"
+      ),
+      labels = c(
+        "LRTI",
+        "Control"
+      )
+    ) +
+    theme_classic(
+      base_size = 12,
+      base_family = "Arial"
+    ) +
+    labs(
+      title = paste(
+        selected_gene,
+        "RNA/protein concordance"
+      ),
+      x = "RNA expression (z-score)",
+      y = "Protein expression (z-score)",
+      color = NULL
+    ) +
+    annotate(
+      "text",
+      x = min(
+        gene_concordance$expr_scaled_rna,
+        na.rm=T
+      ) - 0.05,
+      y = Inf,
+      label = label_text,
+      hjust = 0,
+      vjust = 1.3,
+      size = 3.5,
+      lineheight = 1.0,
+      color = "black",
+      family = "Arial"
+    ) +
+    theme(
+      text = element_text(
+        family = "Arial",
+        size = 12
+      ),
+      axis.text = element_text(
+        color = "black"
+      ),
+      axis.title = element_text(
+        face = "plain"
+      ),
+      plot.title = element_text(
+        hjust = 0.5,
+        face = "plain",
+        size = 12
+      ),
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.text = element_text(
+        size = 12
+      ),
+      legend.title = element_text(
+        size = 12
+      ),
+      plot.margin = ggplot2::margin(
+        t=10,
+        r=20,
+        b=10,
+        l=10
+      )
+    ) +
+    coord_cartesian(
+      xlim = c(
+        min(
+          gene_concordance$expr_scaled_rna,
+          na.rm=T
+        ) - 0.2,
+        max(
+          gene_concordance$expr_scaled_rna,
+          na.rm=T
+        ) + 0.2
+      ),
+      ylim = c(
+        min(
+          gene_concordance$expr_scaled_protein,
+          na.rm=T
+        ) - 0.2,
+        max(
+          gene_concordance$expr_scaled_protein,
+          na.rm=T
+        ) + 0.8
+      ),
+      clip = "off"
+    )
+
+  print(p)
+
+  ggsave(
+    file.path(
+      results_dir,
+      paste0(
+        selected_gene,
+        "_RNA_vs_Protein_concordance_by_adjudication.pdf"
+      )
+    ),
+    plot = p,
+    width = 6.5,
+    height = 6.5,
+    device = cairo_pdf
+  )
+
+}
+
+
+print(interaction_results)
+
+
+
+
+
+
 ```
+
+
+
+
+
+
+
+
+
+
 
 
 

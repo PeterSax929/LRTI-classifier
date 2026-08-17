@@ -5,7 +5,8 @@ output:
     toc: true
 ---
 
-```{r, warning=F, message=F}
+```{r, warning=F, message=T}
+
 
 library(dplyr)
 library(ggplot2)
@@ -28,34 +29,57 @@ raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
 # Import full VST matrix
 full_vsd <- read.csv(
   file.path(data_dir, "vst_full.csv"),
-  stringsAsFactors=F, check.names=F, row.names=1)
+  stringsAsFactors=F,
+  check.names=F,
+  row.names=1
+)
 
 # Convert rownames (ENSG) to a column and map to gene symbols
 ensg2gene <- read.csv(
   file.path(raw_data_dir, "host_gene_counts.csv"),
-  stringsAsFactors=F) %>%
+  stringsAsFactors=F
+) %>%
   { `names<-`(.$gene_symbol, .$X) }
 
 full_vsd <- full_vsd %>%
   rownames_to_column("gene") %>%
   mutate(
     gene_symbol = ensg2gene[gene],
-    gene_symbol = ifelse(is.na(gene_symbol), gene, gene_symbol))
+    gene_symbol = ifelse(
+      is.na(gene_symbol),
+      gene,
+      gene_symbol
+    )
+  )
 
 # Import metadata
 metadata_df_with_folds <- read.csv(
   file.path(data_dir, "metadata_df_with_folds.csv"),
-  stringsAsFactors=F)
+  stringsAsFactors=F
+)
 
 # Import microbe reports
 microbe_reports_bgfilter <- read.csv(
   file.path(raw_data_dir, "microbe_reports_bgfilter.csv"),
-  stringsAsFactors=F)
+  stringsAsFactors=F
+)
+
+# Load new metadata with mNGS hits
+metadata_with_mNGS <- read.csv(
+  file.path(
+    raw_data_dir,
+    "metadata_JCI_mNGS_hits_added_06122026.csv"
+  ),
+  stringsAsFactors=F
+)
 
 # Import protein matrix
 protein_mat <- read.csv(
-  file.path("C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv"),
-  stringsAsFactors=F)
+  file.path(
+    "C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv"
+  ),
+  stringsAsFactors=F
+)
 
 
 
@@ -67,30 +91,70 @@ protein_mat <- read.csv(
 
 # Ensure same patients are used
 microbe_reports_bgfilter <- microbe_reports_bgfilter %>%
-  filter(sample_name %in% metadata_df_with_folds$sample_name)
+  filter(
+    sample_name %in% metadata_df_with_folds$sample_name
+  )
 
 # Filter to viruses only
 virus_reports <- microbe_reports_bgfilter %>%
-  filter(category == "viruses") %>%
+  filter(
+    category == "viruses"
+  ) %>%
   mutate(
     sample_name = factor(
       sample_name,
-      levels = metadata_df_with_folds$sample_name)) %>%
+      levels = metadata_df_with_folds$sample_name
+    )
+  ) %>%
   arrange(sample_name)
 
 # Run by sum viral rpm
 viral_rpm_df <- virus_reports %>%
   group_by(sample_name) %>%
   summarize(
-    viral_rpm = sum(nt_rpm, na.rm=T))
-
-# Add back all patients (patients with no viral rpm included with 0)
-viral_rpm_df <- metadata_df_with_folds %>%
-  dplyr::select(sample_name, LRTI_adjudication) %>%
-  left_join(viral_rpm_df, by = "sample_name") %>%
-  mutate(
-    viral_rpm = ifelse(is.na(viral_rpm), 0, viral_rpm)
+    viral_rpm = sum(nt_rpm, na.rm=T),
+    .groups="drop"
   )
+
+# Add back all patients
+viral_rpm_df <- metadata_df_with_folds %>%
+  dplyr::select(
+    sample_name,
+    LRTI_adjudication
+  ) %>%
+  left_join(
+    viral_rpm_df,
+    by="sample_name"
+  ) %>%
+  mutate(
+    viral_rpm = ifelse(
+      is.na(viral_rpm),
+      0,
+      viral_rpm
+    )
+  )
+
+# Restrict to samples with viral mNGS hits
+samples_with_viral_hits <- metadata_with_mNGS %>%
+  filter(
+    LRTI_adjudication == "Definite"
+  ) %>%
+  dplyr::select(
+    sanitized_name,
+    starts_with("JCI_virus_")
+  ) %>%
+  pivot_longer(
+    cols=starts_with("JCI_virus_"),
+    values_to="pathogen",
+    values_drop_na=TRUE
+  ) %>%
+  filter(
+    pathogen != ""
+  ) %>%
+  dplyr::select(
+    sanitized_name
+  ) %>%
+  distinct()
 
 
 
@@ -100,29 +164,44 @@ viral_rpm_df <- metadata_df_with_folds %>%
 # 11.2a. Select Gene IFNs
 
 
-ifn_genes <- c("ISG15", "IFIT2", "IFIT3")
+ifn_genes <- c(
+  "ISG15",
+  "IFIT2",
+  "IFIT3"
+)
 
 rna_ifn_long <- full_vsd %>%
-  filter(gene_symbol %in% ifn_genes) %>%
+  filter(
+    gene_symbol %in% ifn_genes
+  ) %>%
   pivot_longer(
-    cols = -c(gene, gene_symbol),
-    names_to = "sample_name",
-    values_to = "expr"
+    cols=-c(gene, gene_symbol),
+    names_to="sample_name",
+    values_to="expr"
   ) %>%
   group_by(gene_symbol) %>%
-  mutate(expr_scaled = as.numeric(scale(expr))) %>%
+  mutate(
+    expr_scaled = as.numeric(scale(expr))
+  ) %>%
   ungroup()
 
 ifn_rna_df <- rna_ifn_long %>%
   left_join(
-    viral_rpm_df %>% 
-      dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
-    by = "sample_name"
+    viral_rpm_df %>%
+      dplyr::select(
+        sample_name,
+        viral_rpm,
+        LRTI_adjudication
+      ),
+    by="sample_name"
   )
 
-# Restrict to Definite LRTI only
+# Restrict to Definite LRTI with viral mNGS hits only
 ifn_rna_df_definite <- ifn_rna_df %>%
-  filter(LRTI_adjudication == "Definite")
+  filter(
+    sample_name %in% samples_with_viral_hits$sanitized_name
+  )
+
 
 
 
@@ -131,34 +210,54 @@ ifn_rna_df_definite <- ifn_rna_df %>%
 # 11.2b. Select Protein IFNs
 
 
-ifn_proteins <- c("ISG15", "IFIT2", "IFIT3")
+ifn_proteins <- c(
+  "ISG15",
+  "IFIT2",
+  "IFIT3"
+)
 
 protein_ifn_long <- protein_mat %>%
   { colnames(.)[1] <- "patient_id"; . } %>%
-  mutate(patient_id = as.integer(patient_id)) %>%
-  dplyr::select(patient_id, all_of(ifn_proteins)) %>%
+  mutate(
+    patient_id = as.integer(patient_id)
+  ) %>%
+  dplyr::select(
+    patient_id,
+    all_of(ifn_proteins)
+  ) %>%
   pivot_longer(
-    cols = -patient_id,
-    names_to = "gene_symbol",
-    values_to = "expr_log2"
+    cols=-patient_id,
+    names_to="gene_symbol",
+    values_to="expr_log2"
   ) %>%
   group_by(gene_symbol) %>%
-  mutate(expr_scaled = as.numeric(scale(expr_log2))) %>%
+  mutate(
+    expr_scaled = as.numeric(scale(expr_log2))
+  ) %>%
   ungroup() %>%
   left_join(
     metadata_df_with_folds %>%
-      dplyr::select(patient_id, sample_name),
-      by = "patient_id"
+      dplyr::select(
+        patient_id,
+        sample_name
+      ),
+    by="patient_id"
   ) %>%
   left_join(
     viral_rpm_df,
-    by = "sample_name"
+    by="sample_name"
   ) %>%
-  filter(LRTI_adjudication == "Definite") %>%
-  mutate(modality = "Protein")
+  filter(
+    sample_name %in% samples_with_viral_hits$sanitized_name
+  ) %>%
+  mutate(
+    modality = "Protein"
+  )
 
 ifn_rna_df_definite <- ifn_rna_df_definite %>%
-  mutate(modality = "RNA")
+  mutate(
+    modality = "RNA"
+  )
 
 
 
@@ -170,9 +269,21 @@ ifn_rna_df_definite <- ifn_rna_df_definite %>%
 
 ifn_combined_df <- bind_rows(
   ifn_rna_df_definite %>%
-    dplyr::select(sample_name, gene_symbol, expr_scaled, viral_rpm, modality),
+    dplyr::select(
+      sample_name,
+      gene_symbol,
+      expr_scaled,
+      viral_rpm,
+      modality
+    ),
   protein_ifn_long %>%
-    dplyr::select(sample_name, gene_symbol, expr_scaled, viral_rpm, modality)
+    dplyr::select(
+      sample_name,
+      gene_symbol,
+      expr_scaled,
+      viral_rpm,
+      modality
+    )
 )
 
 
@@ -184,102 +295,208 @@ ifn_combined_df <- bind_rows(
 
 
 omics_colors <- c(
-  "RNA" = "#4C72B0",
-  "Protein" = "#55A868"
+  "RNA" = "#0072B2",
+  "Protein" = "#009073"
 )
 
 cor_ifn_df <- ifn_combined_df %>%
-  group_by(modality, gene_symbol) %>%
+  group_by(
+    modality,
+    gene_symbol
+  ) %>%
   summarize(
-    pearson_r = cor.test(expr_scaled, log10(viral_rpm + 1), method="pearson")$estimate,
-    pearson_p = cor.test(expr_scaled, log10(viral_rpm + 1), method="pearson")$p.value,
-    .groups = "drop"
+    pearson_r = cor.test(
+      expr_scaled,
+      log10(viral_rpm + 1),
+      method="pearson"
+    )$estimate,
+    pearson_p = cor.test(
+      expr_scaled,
+      log10(viral_rpm + 1),
+      method="pearson"
+    )$p.value,
+    .groups="drop"
   ) %>%
   ungroup() %>%
-  mutate(pearson_padj = p.adjust(pearson_p, method="BH"),
-         pearson_padj_fmt = signif(pearson_padj, 2))
+  mutate(
+    pearson_padj = p.adjust(
+      pearson_p,
+      method="BH"
+    ),
+    pearson_padj_fmt = signif(
+      pearson_padj,
+      2
+    )
+  )
 
 interaction_p_df <- ifn_combined_df %>%
   group_by(gene_symbol) %>%
   summarize(
-    interaction_p = summary(lm(
-      expr_scaled ~ log10(viral_rpm + 1) * as.character(modality),
-      data = cur_data()
-    ))$coefficients["log10(viral_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"],
-    .groups = "drop"
+    interaction_p = summary(
+      lm(
+        expr_scaled ~
+          log10(viral_rpm + 1) *
+          as.character(modality),
+        data=cur_data()
+      )
+    )$coefficients[
+      "log10(viral_rpm + 1):as.character(modality)RNA",
+      "Pr(>|t|)"
+    ],
+    .groups="drop"
   )
 
-# Plot
-ggplot(
+p_ifn_select <- ggplot(
   ifn_combined_df,
   aes(
-    x = log10(viral_rpm + 1),
-    y = expr_scaled,
-    color = modality)
+    x=log10(viral_rpm + 1),
+    y=expr_scaled,
+    color=modality
+  )
+) +
+  geom_point(
+    alpha=0.7,
+    size=1.6
   ) +
-  geom_point(alpha = 0.7, size = 1.6) +
-  geom_smooth(method="lm", se=TRUE, alpha=0.15) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_smooth(
+    method="lm",
+    se=TRUE,
+    alpha=0.15
+  ) +
+  geom_hline(
+    yintercept=0,
+    linetype="dashed",
+    color="grey40"
+  ) +
   geom_text(
-  data = cor_ifn_df %>%
-    group_by(gene_symbol) %>%
-    mutate(
-      y_pos = case_when(
-        modality == "RNA" ~ 3.8,      # RNA on top
-        modality == "Protein" ~ 3.45  # Protein just below
+    data=cor_ifn_df %>%
+      group_by(gene_symbol) %>%
+      mutate(
+        y_pos=case_when(
+          modality=="RNA" ~ 3.8,
+          modality=="Protein" ~ 3.45
+        )
+      ),
+    aes(
+      x=max(
+        log10(
+          ifn_combined_df$viral_rpm + 1
+        )
+      ) * 0.98,
+      y=y_pos,
+      label=paste0(
+        modality,
+        ": r = ",
+        formatC(
+          pearson_r,
+          format="f",
+          digits=2
+        ),
+        ", Padj = ",
+        pearson_padj_fmt
       )
     ),
-  aes(
-    x = max(log10(ifn_combined_df$viral_rpm + 1)) * 0.98,
-    y = y_pos,
-    label = paste0(modality, ": r = ", round(pearson_r, 2), ", Padj = ", pearson_padj_fmt)
-  ),
-  inherit.aes = FALSE,
-  size = 3,
-  hjust = 1
+    inherit.aes=FALSE,
+    size=3,
+    hjust=1
   ) +
   geom_text(
-  data = interaction_p_df,
-  aes(
-    x = max(log10(ifn_combined_df$viral_rpm + 1)) * 0.98,
-    y = 3.1,
-    label = paste0("interaction p = ", round(interaction_p, 3))
-  ),
-  inherit.aes = FALSE,
-  size = 3,
-  hjust = 1
+    data=interaction_p_df,
+    aes(
+      x=max(
+        log10(
+          ifn_combined_df$viral_rpm + 1
+        )
+      ) * 0.98,
+      y=3.1,
+      label=paste0(
+        "Interaction p = ",
+        round(
+          interaction_p,
+          3
+        )
+      )
+    ),
+    inherit.aes=FALSE,
+    size=3,
+    hjust=1
   ) +
-  facet_wrap(~ gene_symbol) +
-  coord_cartesian(ylim = c(-3, 3.8)) +
-  scale_color_manual(values = omics_colors) +
-  theme_classic(base_size = 13, base_family = "Helvetica") +
+  facet_wrap(
+    ~gene_symbol
+  ) +
+  coord_cartesian(
+    ylim=c(-3, 3.8)
+  ) +
+  scale_color_manual(
+    values=omics_colors
+  ) +
+  theme_classic(
+    base_size=12,
+    base_family="Arial"
+  ) +
   theme(
-    axis.text        = element_text(face = "bold", color = "black"),
-    axis.title       = element_text(face = "bold"),
-    strip.text       = element_text(face = "bold", size = 13),
-    legend.position  = "bottom",
-    legend.direction = "horizontal",
-    legend.text      = element_text(face = "bold"),
-    legend.title     = element_blank(),
-    plot.title       = element_text(hjust = 0.5, face = "bold"),
-    plot.subtitle    = element_text(hjust = 0.5, color = "grey30"),
-    panel.grid.major = element_line(color = "grey92", linewidth = 0.3)
+    text=element_text(
+      family="Arial",
+      size=12,
+      face="plain"
+    ),
+    axis.text=element_text(
+      family="Arial",
+      size=12,
+      color="black",
+      face="plain"
+    ),
+    axis.title=element_text(
+      family="Arial",
+      size=12,
+      color="black",
+      face="plain"
+    ),
+    strip.text=element_text(
+      family="Arial",
+      size=12,
+      color="black",
+      face="plain"
+    ),
+    legend.position="bottom",
+    legend.direction="horizontal",
+    legend.text=element_text(
+      family="Arial",
+      size=12,
+      face="plain"
+    ),
+    legend.title=element_blank(),
+    plot.title=element_text(
+      family="Arial",
+      size=12,
+      hjust=0.5,
+      face="plain"
+    ),
+    panel.grid.major=element_line(
+      color="grey92",
+      linewidth=0.3
+    )
   ) +
   labs(
-  x = expression(log[10]~"Viral RPM (+1)"),
-  y = "Standardized abundance (z-score)",
-  title = "Viral Load–Dependent IFN Expression",
-  subtitle = "RNA and protein shown separately for each IFN"
-)
+    x=expression(
+      log[10]~"Viral RPM (+1)"
+    ),
+    y="Standardized abundance (z-score)",
+    title="Viral load-dependent IFN expression"
+  )
 
-# Save plot
+print(p_ifn_select)
+
 ggsave(
-  filename    = file.path(results_dir, "Viral_RPM_vs_IFN_RNA_Protein.pdf"),
-  plot        = last_plot(),
-  width       = 9,
-  height      = 5,
-  device      = "pdf",
-  useDingbats = FALSE
+  file.path(
+    results_dir,
+    "Viral_RPM_vs_IFN_RNA_Protein.pdf"
+  ),
+  plot=p_ifn_select,
+  width=6.5,
+  height=6.5,
+  device=cairo_pdf,
+  bg="white"
 )
 
 
@@ -291,361 +508,870 @@ ggsave(
 
 
 ifn_geneset <- msigdbr(
-  species = "Homo sapiens",
-  category = "H"
+  species="Homo sapiens",
+  collection="H"
+) %>%
+  filter(
+    gs_name %in% c(
+      "HALLMARK_INTERFERON_ALPHA_RESPONSE"
+    )
   ) %>%
-  filter(gs_name %in% c(
-    "HALLMARK_INTERFERON_ALPHA_RESPONSE",
-    "HALLMARK_INTERFERON_GAMMA_RESPONSE"
-  )) %>%
   pull(gene_symbol) %>%
   unique()
 
-
-
-
-
-
-# 11.3a. Calculate RNA score
-
-
-hallmark_ifn_genes <- intersect(ifn_geneset, full_vsd$gene_symbol)
-
-# Build long format RNA table for IFN genes
-rna_ifn_hallmark_long <- full_vsd %>%
-  filter(gene_symbol %in% hallmark_ifn_genes) %>%
-  pivot_longer(
-    cols = -c(gene, gene_symbol),
-    names_to = "sample_name",
-    values_to = "expr"
-  )
-
-# Calculate composite IFN score per sample
-ifn_score_df <- rna_ifn_hallmark_long %>%
-  group_by(gene_symbol) %>%
-  mutate(expr_scaled = as.numeric(scale(expr))) %>%  # scale per gene
-  ungroup() %>%
-  group_by(sample_name) %>%
-  summarize(IFN_score = mean(expr_scaled, na.rm=T))
-
-summary(ifn_score_df$IFN_score)
-nrow(ifn_score_df)
-
-# Merge with viral RPM and LRTI adjudication info
-ifn_score_plot_df <- ifn_score_df %>%
-  left_join(
-    viral_rpm_df %>% 
-      dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
-      by = "sample_name"
-  )
-
-# Filter to Definite LRTI cases only
-ifn_score_plot_df_definite <- ifn_score_plot_df %>%
-  filter(LRTI_adjudication == "Definite")
-
-ifn_score_plot_df_definite <- ifn_score_plot_df_definite %>%
-  mutate(modality = "RNA")
-
-
-
-
-
-
-# 11.3b. Calculate protein score
-
-
-protein_ifn_hallmark_long <- protein_mat %>%
-  { colnames(.)[1] <- "patient_id"; . } %>%                  
-  mutate(patient_id = as.integer(patient_id)) %>%
-  pivot_longer(
-    cols = -patient_id,
-    names_to = "gene_symbol",
-    values_to = "expr_log2"
-  ) %>%
-  filter(gene_symbol %in% hallmark_ifn_genes) %>%
-  left_join(
-    metadata_df_with_folds %>%
-      dplyr::select(patient_id, sample_name),
-    by = "patient_id"
-  )
-
-protein_ifn_score_df <- protein_ifn_hallmark_long %>%
-  group_by(gene_symbol) %>%
-  mutate(expr_scaled = as.numeric(scale(expr_log2))) %>%   # scale per protein
-  ungroup() %>%
-  group_by(sample_name) %>%
-  summarize(IFN_score = mean(expr_scaled, na.rm=T)) %>%
-  mutate(modality = "Protein")
-
-ifn_score_combined_df <- bind_rows(
-  ifn_score_plot_df_definite %>%
-    dplyr::select(sample_name, viral_rpm, IFN_score, modality),
-  protein_ifn_score_df %>%
-    left_join(
-      viral_rpm_df %>%
-        dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
-        by = "sample_name"
-    ) %>%
-    filter(LRTI_adjudication == "Definite") %>%
-    dplyr::select(sample_name, viral_rpm, IFN_score, modality)
+hallmark_ifn_genes <- intersect(
+  ifn_geneset,
+  full_vsd$gene_symbol
 )
 
+cat(
+  "IFN alpha genes in RNA data:",
+  length(hallmark_ifn_genes),
+  "\n"
+)
 
-
-
-
-
-# 11.3c. Plot composite score
-
-
-cor_composite_df <- ifn_score_combined_df %>%
-  group_by(modality) %>%
-  summarize(
-    pearson_r = cor.test(IFN_score, log10(viral_rpm + 1), method="pearson")$estimate,
-    pearson_p = cor.test(IFN_score, log10(viral_rpm + 1), method="pearson")$p.value,
-    .groups = "drop"
-  ) %>%
-  ungroup() %>%
-  mutate(pearson_padj = p.adjust(pearson_p, method="BH"),
-         pearson_padj_fmt = signif(pearson_padj, 2))
-
-interaction_p_composite <- summary(lm(
-  IFN_score ~ log10(viral_rpm + 1) * as.character(modality),
-  data = ifn_score_combined_df
-))$coefficients["log10(viral_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"]
-
-ggplot(
-  ifn_score_combined_df,
-  aes(
-    x = log10(viral_rpm + 1),
-    y = IFN_score,
-    color = modality)
-  ) +
-  geom_point(alpha = 0.7, size = 1.8) +
-  geom_smooth(method="lm", se=TRUE, alpha=0.15) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
-  geom_text(
-  data = cor_composite_df %>% 
-    mutate(
-      y_pos = case_when(
-        modality == "RNA" ~ -1.3,     # RNA label on top
-        modality == "Protein" ~ -1.5  # Protein label just below
-      )
-    ),
-  aes(
-    x = max(log10(ifn_score_combined_df$viral_rpm + 1)) * 0.98,
-    y = y_pos,
-    label = paste0(modality, ": r = ", round(pearson_r, 2), ", Padj = ", pearson_padj_fmt)
+cat(
+  "IFN alpha genes in protein data:",
+  sum(
+    hallmark_ifn_genes %in%
+      colnames(protein_mat)[-1]
   ),
-  inherit.aes = FALSE,
-  size = 4,
-  hjust = 1
-  ) +
-  annotate(
-  "text",
-  x = max(log10(ifn_score_combined_df$viral_rpm + 1)) * 0.98,
-  y = -1.7,
-  label = paste0("Interaction p = ", signif(interaction_p_composite, 2)),
-  size = 4,
-  hjust = 1
-  ) +
-  coord_cartesian(ylim = c(-1.8,1.5)) +
-  scale_color_manual(values = omics_colors) +
-  theme_classic(base_size = 13, base_family = "Helvetica") +
-  theme(
-    axis.text        = element_text(face = "bold", color = "black"),
-    axis.title       = element_text(face = "bold"),
-    legend.position  = "bottom",
-    legend.direction = "horizontal",
-    legend.text      = element_text(face = "bold"),
-    legend.title     = element_blank(),
-    plot.title       = element_text(hjust = 0.5, face = "bold"),
-    plot.subtitle    = element_text(hjust = 0.5, color = "grey30"),
-    panel.grid.major = element_line(color = "grey92", linewidth = 0.3)
-  ) +
-  labs(
-    x = expression(log[10]~"Viral RPM (+1)"),
-    y = "Composite IFN score (z-score)",
-    title = "Viral Load vs Composite Interferon Response",
-    subtitle = "Hallmark IFNα + IFNγ pathways (RNA and protein)"
-  )
+  "\n"
+)
 
-# Save plot
-ggsave(
-  filename    = file.path(results_dir, "Composite_IFN_score_vs_Viral_RPM.pdf"),
-  plot        = last_plot(),
-  width       = 7,
-  height      = 5,
-  device      = "pdf",
-  useDingbats = FALSE
+hallmark_ifn_genes_shared <- intersect(
+  hallmark_ifn_genes,
+  colnames(protein_mat)[-1]
+)
+
+cat(
+  "Shared IFN alpha genes (in both RNA and protein):",
+  length(hallmark_ifn_genes_shared),
+  "\n"
 )
 
 
-# RNA
-length(intersect(ifn_geneset, full_vsd$gene_symbol))
+# Build IFN score for a given set of sample RPM values
+build_ifn_score <- function(rpm_df) {
 
-# Protein
-length(intersect(ifn_geneset, colnames(protein_mat)))
+  bind_rows(
 
+    # RNA
+    full_vsd %>%
+      filter(
+        gene_symbol %in% hallmark_ifn_genes
+      ) %>%
+      pivot_longer(
+        cols=-c(gene, gene_symbol),
+        names_to="sample_name",
+        values_to="expr"
+      ) %>%
+      group_by(gene_symbol) %>%
+      mutate(
+        expr_scaled=as.numeric(
+          scale(expr)
+        )
+      ) %>%
+      ungroup() %>%
+      group_by(sample_name) %>%
+      summarize(
+        IFN_score=mean(
+          expr_scaled,
+          na.rm=T
+        ),
+        .groups="drop"
+      ) %>%
+      mutate(
+        modality="RNA"
+      ),
 
+    # Protein
+    protein_mat %>%
+      { colnames(.)[1] <- "patient_id"; . } %>%
+      mutate(
+        patient_id=as.integer(patient_id)
+      ) %>%
+      pivot_longer(
+        cols=-patient_id,
+        names_to="gene_symbol",
+        values_to="expr_log2"
+      ) %>%
+      filter(
+        gene_symbol %in%
+          intersect(
+            hallmark_ifn_genes,
+            colnames(protein_mat)[-1]
+          )
+      ) %>%
+      left_join(
+        metadata_df_with_folds %>%
+          dplyr::select(
+            patient_id,
+            sample_name
+          ),
+        by="patient_id"
+      ) %>%
+      group_by(gene_symbol) %>%
+      mutate(
+        expr_scaled=as.numeric(
+          scale(expr_log2)
+        )
+      ) %>%
+      ungroup() %>%
+      group_by(sample_name) %>%
+      summarize(
+        IFN_score=mean(
+          expr_scaled,
+          na.rm=T
+        ),
+        .groups="drop"
+      ) %>%
+      mutate(
+        modality="Protein"
+      )
 
-
-
-
-# 11.4. Separate IFNα and IFNγ composite scores
-
-
-# Split gene sets
-ifn_alpha_genes <- intersect(
-  msigdbr(species="Homo sapiens", category="H") %>%
-    filter(gs_name == "HALLMARK_INTERFERON_ALPHA_RESPONSE") %>%
-    pull(gene_symbol),
-  full_vsd$gene_symbol
-)
-
-ifn_gamma_genes <- intersect(
-  msigdbr(species="Homo sapiens", category="H") %>%
-    filter(gs_name == "HALLMARK_INTERFERON_GAMMA_RESPONSE") %>%
-    pull(gene_symbol),
-  full_vsd$gene_symbol
-)
-
-cat("IFNα genes in RNA data:", length(ifn_alpha_genes), "\n")
-cat("IFNγ genes in RNA data:", length(ifn_gamma_genes), "\n")
-cat("IFNα genes in protein data:", sum(ifn_alpha_genes %in% colnames(protein_mat)), "\n")
-cat("IFNγ genes in protein data:", sum(ifn_gamma_genes %in% colnames(protein_mat)), "\n")
-
-
-
-
-
-
-# 11.4a. Score calculation function
-
-
-calc_ifn_score <- function(gene_set, label) {
-
-  # RNA score
-  rna_score <- full_vsd %>%
-    filter(gene_symbol %in% gene_set) %>%
-    pivot_longer(cols=-c(gene, gene_symbol), names_to="sample_name", values_to="expr") %>%
-    group_by(gene_symbol) %>%
-    mutate(expr_scaled = as.numeric(scale(expr))) %>%
-    ungroup() %>%
-    group_by(sample_name) %>%
-    summarize(IFN_score = mean(expr_scaled, na.rm=T), .groups="drop") %>%
-    mutate(modality = "RNA")
-
-  # Protein score
-  prot_genes_available <- intersect(gene_set, colnames(protein_mat)[-1])
-
-  prot_score <- protein_mat %>%
-    { colnames(.)[1] <- "patient_id"; . } %>%
-    mutate(patient_id = as.integer(patient_id)) %>%
-    pivot_longer(cols=-patient_id, names_to="gene_symbol", values_to="expr_log2") %>%
-    filter(gene_symbol %in% prot_genes_available) %>%
-    left_join(metadata_df_with_folds %>% dplyr::select(patient_id, sample_name), by="patient_id") %>%
-    group_by(gene_symbol) %>%
-    mutate(expr_scaled = as.numeric(scale(expr_log2))) %>%
-    ungroup() %>%
-    group_by(sample_name) %>%
-    summarize(IFN_score = mean(expr_scaled, na.rm=T), .groups="drop") %>%
-    mutate(modality = "Protein")
-
-  # Combine and add viral RPM + filter to Definite
-  bind_rows(rna_score, prot_score) %>%
-    left_join(viral_rpm_df %>% dplyr::select(sample_name, viral_rpm, LRTI_adjudication),
-              by="sample_name") %>%
-    filter(LRTI_adjudication == "Definite") %>%
-    mutate(ifn_type = label)
+  ) %>%
+    inner_join(
+      rpm_df,
+      by="sample_name"
+    )
 }
 
-ifn_alpha_df <- calc_ifn_score(ifn_alpha_genes, "IFNα")
-ifn_gamma_df <- calc_ifn_score(ifn_gamma_genes, "IFNγ")
+
+# Build IFN score using only shared genes (present in both RNA and protein)
+build_ifn_score_shared <- function(rpm_df) {
+
+  bind_rows(
+
+    full_vsd %>%
+      filter(
+        gene_symbol %in%
+          hallmark_ifn_genes_shared
+      ) %>%
+      pivot_longer(
+        cols=-c(gene, gene_symbol),
+        names_to="sample_name",
+        values_to="expr"
+      ) %>%
+      group_by(gene_symbol) %>%
+      mutate(
+        expr_scaled=as.numeric(
+          scale(expr)
+        )
+      ) %>%
+      ungroup() %>%
+      group_by(sample_name) %>%
+      summarize(
+        IFN_score=mean(
+          expr_scaled,
+          na.rm=T
+        ),
+        .groups="drop"
+      ) %>%
+      mutate(
+        modality="RNA"
+      ),
+
+    protein_mat %>%
+      { colnames(.)[1] <- "patient_id"; . } %>%
+      mutate(
+        patient_id=as.integer(patient_id)
+      ) %>%
+      pivot_longer(
+        cols=-patient_id,
+        names_to="gene_symbol",
+        values_to="expr_log2"
+      ) %>%
+      filter(
+        gene_symbol %in%
+          hallmark_ifn_genes_shared
+      ) %>%
+      left_join(
+        metadata_df_with_folds %>%
+          dplyr::select(
+            patient_id,
+            sample_name
+          ),
+        by="patient_id"
+      ) %>%
+      group_by(gene_symbol) %>%
+      mutate(
+        expr_scaled=as.numeric(
+          scale(expr_log2)
+        )
+      ) %>%
+      ungroup() %>%
+      group_by(sample_name) %>%
+      summarize(
+        IFN_score=mean(
+          expr_scaled,
+          na.rm=T
+        ),
+        .groups="drop"
+      ) %>%
+      mutate(
+        modality="Protein"
+      )
+
+  ) %>%
+    inner_join(
+      rpm_df,
+      by="sample_name"
+    )
+}
 
 
+# Helper function: compute correlations
+compute_cor <- function(
+  score_df,
+  rpm_col="viral_rpm"
+) {
 
-
-
-
-# 11.4b. Plot function
-
-
-plot_ifn_score <- function(score_df, ifn_label, filename) {
-
-  cor_df <- score_df %>%
+  score_df %>%
     group_by(modality) %>%
     summarize(
-      pearson_r = cor.test(IFN_score, log10(viral_rpm + 1), method="pearson")$estimate,
-      pearson_p = cor.test(IFN_score, log10(viral_rpm + 1), method="pearson")$p.value,
+      n_obs=n(),
+      pearson_r=if(
+        n() >= 3
+      ) {
+        cor.test(
+          IFN_score,
+          log10(
+            .data[[rpm_col]] + 1
+          ),
+          method="pearson"
+        )$estimate
+      } else {
+        NA
+      },
+      pearson_p=if(
+        n() >= 3
+      ) {
+        cor.test(
+          IFN_score,
+          log10(
+            .data[[rpm_col]] + 1
+          ),
+          method="pearson"
+        )$p.value
+      } else {
+        NA
+      },
       .groups="drop"
     ) %>%
-    ungroup() %>%
     mutate(
-      pearson_padj     = p.adjust(pearson_p, method="BH"),
-      pearson_padj_fmt = signif(pearson_padj, 2),
-      y_pos = case_when(
-        modality == "RNA"     ~ -1.3,
-        modality == "Protein" ~ -1.5
-        ))
+      pearson_padj=p.adjust(
+        pearson_p,
+        method="BH"
+      ),
+      pearson_padj_fmt=signif(
+        pearson_padj,
+        2
+      ),
+      y_pos=case_when(
+        modality=="RNA" ~ -1.3,
+        modality=="Protein" ~ -1.5
+      )
+    )
+}
 
-  interaction_p <- summary(lm(
-    IFN_score ~ log10(viral_rpm + 1) * as.character(modality),
-    data = score_df
-  ))$coefficients["log10(viral_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"]
 
-  p <- ggplot(score_df, aes(x=log10(viral_rpm + 1), y=IFN_score, color=modality)) +
-    geom_point(alpha=0.7, size=1.8) +
-    geom_smooth(method="lm", se=TRUE, alpha=0.15) +
-    geom_hline(yintercept=0, linetype="dashed", color="grey40") +
+# Helper function: make plot
+make_ifn_plot <- function(
+  score_df,
+  cor_df,
+  interaction_p,
+  n_cases,
+  x_label,
+  title,
+  subtitle,
+  filename
+) {
+
+  p <- ggplot(
+    score_df,
+    aes(
+      x=log10(viral_rpm + 1),
+      y=IFN_score,
+      color=modality
+    )
+  ) +
+
+    geom_point(
+      alpha=0.7,
+      size=1.8
+    ) +
+
+    geom_smooth(
+      method="lm",
+      se=TRUE,
+      alpha=0.15
+    ) +
+
+    geom_hline(
+      yintercept=0,
+      linetype="dashed",
+      color="grey40"
+    ) +
+
+    # Correlation information
     geom_text(
-      data = cor_df,
-        aes(
-          x = max(log10(score_df$viral_rpm + 1)) * 0.98,
-          y = y_pos - 0.2,
-          label = paste0(modality, ": r = ", round(pearson_r, 2), ", Padj = ", pearson_padj_fmt)),
-          inherit.aes = FALSE,
-          size = 4,
-          hjust = 1
+      data=cor_df,
+      aes(
+        x=max(
+          log10(
+            score_df$viral_rpm + 1
+          )
+        ) * 0.98,
+        y=y_pos,
+        label=paste0(
+          modality,
+          ": r = ",
+          formatC(
+            pearson_r,
+            format="f",
+            digits=2
+          )
+        )
+      ),
+      inherit.aes=FALSE,
+      size=4,
+      hjust=1
     ) +
-    annotate("text",
-      x = max(log10(score_df$viral_rpm + 1)) * 0.98,
-      y = -1.9,
-      label = paste0("Interaction p = ", signif(interaction_p, 2)),
-      size = 4,
-      hjust = 1
-      ) +
-    coord_cartesian(ylim = c(-2.0, 1.5)) +
-    scale_color_manual(values=omics_colors) +
-    theme_classic(base_size=13, base_family="Helvetica") +
+
+    # Interaction p-value
+    annotate(
+      "text",
+      x=max(
+        log10(
+          score_df$viral_rpm + 1
+        )
+      ) * 0.98,
+      y=-1.7,
+      label=ifelse(
+        interaction_p < 0.001,
+        "Interaction p < 0.001",
+        paste0(
+          "Interaction p = ",
+          formatC(
+            interaction_p,
+            format="e",
+            digits=2
+          )
+        )
+      ),
+      size=4,
+      hjust=1
+    ) +
+
+    coord_cartesian(
+      ylim=c(-2.0, 1.5)
+    ) +
+
+    scale_color_manual(
+      values=omics_colors
+    ) +
+
+    theme_classic(
+      base_size=12,
+      base_family="Arial"
+    ) +
+
     theme(
-      axis.text        = element_text(face="bold", color="black"),
-      axis.title       = element_text(face="bold"),
-      legend.position  = "bottom",
-      legend.direction = "horizontal",
-      legend.text      = element_text(face="bold"),
-      legend.title     = element_blank(),
-      plot.title       = element_text(hjust=0.5, face="bold"),
-      plot.subtitle    = element_text(hjust=0.5, color="grey30"),
-      panel.grid.major = element_line(color="grey92", linewidth=0.3)
+      text=element_text(
+        family="Arial",
+        size=12,
+        face="plain"
+      ),
+      axis.text=element_text(
+        family="Arial",
+        size=12,
+        color="black",
+        face="plain"
+      ),
+      axis.title=element_text(
+        family="Arial",
+        size=12,
+        color="black",
+        face="plain"
+      ),
+      legend.position="bottom",
+      legend.direction="horizontal",
+      legend.text=element_text(
+        family="Arial",
+        size=12,
+        face="plain"
+      ),
+      legend.title=element_blank(),
+      plot.title=element_text(
+        family="Arial",
+        size=12,
+        hjust=0.5,
+        face="plain"
+      ),
+      plot.margin=margin(
+        10,
+        10,
+        10,
+        10
+      )
     ) +
+
     labs(
-      x = expression(log[10]~"Viral RPM (+1)"),
-      y = paste0("Composite ", ifn_label, " score (z-score)"),
-      title = paste0("Viral Load vs Composite ", ifn_label, " Response"),
-      subtitle = paste0("Hallmark ", ifn_label, " pathway (RNA and protein)")
+      x=x_label,
+      y="IFN alpha score (z-score)",
+      title=title
     )
 
   print(p)
-  ggsave(file.path(results_dir, filename), plot=p, width=7, height=5,
-         device="pdf", useDingbats=FALSE)
+
+  ggsave(
+    file.path(
+      results_dir,
+      filename
+    ),
+    p,
+    width=6.5,
+    height=6.5,
+    device=cairo_pdf,
+    bg="white"
+  )
 }
 
 
+# Define RSV and rhinovirus sample sets upfront
+samples_with_rsv <- metadata_with_mNGS %>%
+  filter(
+    LRTI_adjudication=="Definite"
+  ) %>%
+  dplyr::select(
+    sanitized_name,
+    starts_with("JCI_virus_")
+  ) %>%
+  pivot_longer(
+    cols=starts_with("JCI_virus_"),
+    values_to="pathogen",
+    values_drop_na=TRUE
+  ) %>%
+  filter(
+    grepl(
+      "orthopneumovirus|respiratory syncytial virus",
+      pathogen,
+      ignore.case=TRUE
+    )
+  ) %>%
+  dplyr::select(
+    sanitized_name
+  ) %>%
+  distinct()
 
-plot_ifn_score(ifn_alpha_df, "IFNα", "Composite_IFNalpha_score_vs_Viral_RPM.pdf")
+samples_with_rhino <- metadata_with_mNGS %>%
+  filter(
+    LRTI_adjudication=="Definite"
+  ) %>%
+  dplyr::select(
+    sanitized_name,
+    starts_with("JCI_virus_")
+  ) %>%
+  pivot_longer(
+    cols=starts_with("JCI_virus_"),
+    values_to="pathogen",
+    values_drop_na=TRUE
+  ) %>%
+  filter(
+    grepl(
+      "rhinovirus",
+      pathogen,
+      ignore.case=TRUE
+    )
+  ) %>%
+  dplyr::select(
+    sanitized_name
+  ) %>%
+  distinct()
 
-plot_ifn_score(ifn_gamma_df, "IFNγ", "Composite_IFNgamma_score_vs_Viral_RPM.pdf")
+
+
+
+
+
+# 11.3a. Viral load vs IFN - ALL VIRAL mNGS HITS (n=62 Definite)
+
+
+samples_with_viral_hits <- metadata_with_mNGS %>%
+  filter(
+    LRTI_adjudication=="Definite"
+  ) %>%
+  dplyr::select(
+    sanitized_name,
+    starts_with("JCI_virus_")
+  ) %>%
+  pivot_longer(
+    cols=starts_with("JCI_virus_"),
+    values_to="pathogen",
+    values_drop_na=TRUE
+  ) %>%
+  filter(
+    pathogen != ""
+  ) %>%
+  dplyr::select(
+    sanitized_name
+  ) %>%
+  distinct()
+
+viral_all_hits <- microbe_reports_bgfilter %>%
+  filter(
+    category=="viruses",
+    sample_name %in%
+      samples_with_viral_hits$sanitized_name
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(
+    viral_rpm=sum(
+      nt_rpm,
+      na.rm=TRUE
+    ),
+    .groups="drop"
+  )
+
+message(
+  "11.3a - n samples with viral hits: ",
+  nrow(viral_all_hits)
+)
+
+ifn_score_viral_all <- build_ifn_score(
+  viral_all_hits
+)
+
+cor_viral_all <- compute_cor(
+  ifn_score_viral_all
+)
+
+interaction_p_viral_all <- summary(
+  lm(
+    IFN_score ~
+      log10(viral_rpm + 1) *
+      as.character(modality),
+    data=ifn_score_viral_all
+  )
+)$coefficients[
+  "log10(viral_rpm + 1):as.character(modality)RNA",
+  "Pr(>|t|)"
+]
+
+make_ifn_plot(
+  score_df=ifn_score_viral_all,
+  cor_df=cor_viral_all,
+  interaction_p=interaction_p_viral_all,
+  n_cases=nrow(viral_all_hits),
+  x_label=expression(
+    log[10]~"viral RPM (+1)"
+  ),
+  title="Composite IFN alpha score versus viral abundance",
+  subtitle=NULL,
+  filename="Viral_All_vs_IFNa_mNGS.pdf"
+)
+
+
+# Shared-gene version (same 49 genes/proteins for both modalities)
+
+
+ifn_score_viral_all_shared <- build_ifn_score_shared(
+  viral_all_hits
+)
+
+cor_viral_all_shared <- compute_cor(
+  ifn_score_viral_all_shared
+)
+
+interaction_p_viral_all_shared <- summary(
+  lm(
+    IFN_score ~
+      log10(viral_rpm + 1) *
+      as.character(modality),
+    data=ifn_score_viral_all_shared
+  )
+)$coefficients[
+  "log10(viral_rpm + 1):as.character(modality)RNA",
+  "Pr(>|t|)"
+]
+
+make_ifn_plot(
+  score_df=ifn_score_viral_all_shared,
+  cor_df=cor_viral_all_shared,
+  interaction_p=interaction_p_viral_all_shared,
+  n_cases=nrow(viral_all_hits),
+  x_label=expression(
+    log[10]~"viral RPM (+1)"
+  ),
+  title="Composite IFN alpha score versus viral abundance",
+  subtitle=NULL,
+  filename="Viral_All_vs_IFNa_mNGS_shared.pdf"
+)
+
+
+
+
+
+
+# 11.3b. RSV specific (n=43 Definite)
+
+
+viral_rsv_hits <- microbe_reports_bgfilter %>%
+  filter(
+    category=="viruses",
+    sample_name %in%
+      samples_with_rsv$sanitized_name,
+    grepl(
+      "orthopneumovirus|respiratory syncytial virus",
+      name,
+      ignore.case=TRUE
+    )
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(
+    viral_rpm=sum(
+      nt_rpm,
+      na.rm=TRUE
+    ),
+    .groups="drop"
+  )
+
+message(
+  "11.3b - n RSV samples: ",
+  nrow(viral_rsv_hits)
+)
+
+ifn_score_rsv <- build_ifn_score(
+  viral_rsv_hits
+)
+
+cor_rsv <- compute_cor(
+  ifn_score_rsv
+)
+
+interaction_p_rsv <- summary(
+  lm(
+    IFN_score ~
+      log10(viral_rpm + 1) *
+      as.character(modality),
+    data=ifn_score_rsv
+  )
+)$coefficients[
+  "log10(viral_rpm + 1):as.character(modality)RNA",
+  "Pr(>|t|)"
+]
+
+make_ifn_plot(
+  score_df=ifn_score_rsv,
+  cor_df=cor_rsv,
+  interaction_p=interaction_p_rsv,
+  n_cases=nrow(viral_rsv_hits),
+  x_label=expression(
+    log[10]~"RSV RPM (+1)"
+  ),
+  title="RSV load versus IFN alpha response",
+  subtitle=NULL,
+  filename="RSV_vs_IFNa_mNGS.pdf"
+)
+
+
+# Sensitivity: exclude the 2 cases with both RSV and rhinovirus
+samples_rsv_only <- samples_with_rsv %>%
+  filter(
+    !sanitized_name %in%
+      samples_with_rhino$sanitized_name
+  )
+
+viral_rsv_hits_sensitivity <- microbe_reports_bgfilter %>%
+  filter(
+    category=="viruses",
+    sample_name %in%
+      samples_rsv_only$sanitized_name,
+    grepl(
+      "orthopneumovirus|respiratory syncytial virus",
+      name,
+      ignore.case=TRUE
+    )
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(
+    viral_rpm=sum(
+      nt_rpm,
+      na.rm=TRUE
+    ),
+    .groups="drop"
+  )
+
+message(
+  "11.3b sensitivity - n RSV-only samples: ",
+  nrow(viral_rsv_hits_sensitivity)
+)
+
+ifn_score_rsv_sensitivity <- build_ifn_score(
+  viral_rsv_hits_sensitivity
+)
+
+cor_rsv_sensitivity <- compute_cor(
+  ifn_score_rsv_sensitivity
+)
+
+interaction_p_rsv_sensitivity <- summary(
+  lm(
+    IFN_score ~
+      log10(viral_rpm + 1) *
+      as.character(modality),
+    data=ifn_score_rsv_sensitivity
+  )
+)$coefficients[
+  "log10(viral_rpm + 1):as.character(modality)RNA",
+  "Pr(>|t|)"
+]
+
+make_ifn_plot(
+  score_df=ifn_score_rsv_sensitivity,
+  cor_df=cor_rsv_sensitivity,
+  interaction_p=interaction_p_rsv_sensitivity,
+  n_cases=nrow(viral_rsv_hits_sensitivity),
+  x_label=expression(
+    log[10]~"RSV RPM (+1)"
+  ),
+  title="RSV load versus IFN alpha response (sensitivity)",
+  subtitle=NULL,
+  filename="RSV_vs_IFNa_mNGS_sensitivity.pdf"
+)
+
+
+
+
+
+
+# 11.3c. Rhinovirus specific (n=8 Definite)
+
+
+viral_rhino_hits <- microbe_reports_bgfilter %>%
+  filter(
+    category=="viruses",
+    sample_name %in%
+      samples_with_rhino$sanitized_name,
+    grepl(
+      "rhinovirus",
+      name,
+      ignore.case=TRUE
+    )
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(
+    viral_rpm=sum(
+      nt_rpm,
+      na.rm=TRUE
+    ),
+    .groups="drop"
+  )
+
+message(
+  "11.3c - n rhinovirus samples: ",
+  nrow(viral_rhino_hits)
+)
+
+ifn_score_rhino <- build_ifn_score(
+  viral_rhino_hits
+)
+
+cor_rhino <- compute_cor(
+  ifn_score_rhino
+)
+
+interaction_p_rhino <- summary(
+  lm(
+    IFN_score ~
+      log10(viral_rpm + 1) *
+      as.character(modality),
+    data=ifn_score_rhino
+  )
+)$coefficients[
+  "log10(viral_rpm + 1):as.character(modality)RNA",
+  "Pr(>|t|)"
+]
+
+make_ifn_plot(
+  score_df=ifn_score_rhino,
+  cor_df=cor_rhino,
+  interaction_p=interaction_p_rhino,
+  n_cases=nrow(viral_rhino_hits),
+  x_label=expression(
+    log[10]~"Rhinovirus RPM (+1)"
+  ),
+  title="Rhinovirus load versus IFN alpha response",
+  subtitle=NULL,
+  filename="Rhinovirus_vs_IFNa_mNGS.pdf"
+)
+
+
+# Sensitivity: exclude the 2 cases with both RSV and rhinovirus
+samples_rhino_only <- samples_with_rhino %>%
+  filter(
+    !sanitized_name %in%
+      samples_with_rsv$sanitized_name
+  )
+
+viral_rhino_hits_sensitivity <- microbe_reports_bgfilter %>%
+  filter(
+    category=="viruses",
+    sample_name %in%
+      samples_rhino_only$sanitized_name,
+    grepl(
+      "rhinovirus",
+      name,
+      ignore.case=TRUE
+    )
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(
+    viral_rpm=sum(
+      nt_rpm,
+      na.rm=TRUE
+    ),
+    .groups="drop"
+  )
+
+message(
+  "11.3c sensitivity - n rhinovirus-only samples: ",
+  nrow(viral_rhino_hits_sensitivity)
+)
+
+ifn_score_rhino_sensitivity <- build_ifn_score(
+  viral_rhino_hits_sensitivity
+)
+
+cor_rhino_sensitivity <- compute_cor(
+  ifn_score_rhino_sensitivity
+)
+
+interaction_p_rhino_sensitivity <- summary(
+  lm(
+    IFN_score ~
+      log10(viral_rpm + 1) *
+      as.character(modality),
+    data=ifn_score_rhino_sensitivity
+  )
+)$coefficients[
+  "log10(viral_rpm + 1):as.character(modality)RNA",
+  "Pr(>|t|)"
+]
+
+make_ifn_plot(
+  score_df=ifn_score_rhino_sensitivity,
+  cor_df=cor_rhino_sensitivity,
+  interaction_p=interaction_p_rhino_sensitivity,
+  n_cases=nrow(viral_rhino_hits_sensitivity),
+  x_label=expression(
+    log[10]~"Rhinovirus RPM (+1)"
+  ),
+  title="Rhinovirus load versus IFN alpha response (sensitivity)",
+  subtitle=NULL,
+  filename="Rhinovirus_vs_IFNa_mNGS_sensitivity.pdf"
+)
 
 
 
@@ -653,7 +1379,4 @@ plot_ifn_score(ifn_gamma_df, "IFNγ", "Composite_IFNgamma_score_vs_Viral_RPM.pdf
 
 
 ```
-
-
-
 

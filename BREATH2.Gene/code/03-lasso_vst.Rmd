@@ -32,18 +32,19 @@ metadata_df_with_folds <- read.csv(
   file.path(data_dir, "metadata_df_with_folds.csv"),
   stringsAsFactors=F)
 
-# Host counts (remove gene_symbol col, rownames = ENSG)
+# Host counts (remove gene_symbol column, rownames = ENSG)
 host_counts <- read.csv(
   file.path(raw_data_dir, "host_gene_counts.csv"),
-  stringsAsFactors=F, row.names = 1)[, -1]
+  stringsAsFactors=F,
+  row.names=1)[, -1]
 
 # Filter to samples used for CV
 cv_host_counts <- host_counts[, metadata_df_with_folds$sample_name, drop=F]
 
-# Call number of folds
+# Number of folds
 nfolds <- as.numeric(Parameters["Folds", "Count"])
 
-# Map ENSG to SYMBOL vector
+# Map ENSG to SYMBOL
 ensg2gene <- read.csv(
   file.path(raw_data_dir, "host_gene_counts.csv"),
   stringsAsFactors=F) %>%
@@ -57,189 +58,236 @@ ensg2gene <- read.csv(
 # 3.2. LASSO function
 
 
-# Set to NULL for lambda.1se, or 1 or 3 for fixed-n
-target_n <- NULL
-
 lasso_cv_outer_fold <- function(test_fold) {
-   set.seed(8634782 + test_fold)
 
-  
-  
-  
-    
-
-# 3.2a. VST training samples ONLY
-  
+  set.seed(8634782 + test_fold)
 
   # Identify train/test samples
   train_idx <- metadata_df_with_folds$fold != test_fold
+  test_idx  <- metadata_df_with_folds$fold == test_fold
 
+
+  
+  
+  
+  
+  # 3.2a. VST using training samples only
+
+  
   # Extract training counts
   train_counts <- cv_host_counts[, train_idx, drop=F]
 
-  # Build DESeq2 object for training samples only
+  # Build DESeq2 object using training samples only
   dds_train <- DESeq2::DESeqDataSetFromMatrix(
     countData = train_counts,
     colData = metadata_df_with_folds[train_idx, , drop=F],
     design = ~1)
 
-  # Calculate size factors
+  # Estimate size factors and dispersions from training data
   dds_train <- DESeq2::estimateSizeFactors(dds_train)
-
   dds_train <- DESeq2::estimateDispersions(dds_train)
 
-  # Apply VST to training samples only
-  vsd_train <- DESeq2::varianceStabilizingTransformation(dds_train, 
-    blind=F, fitType="parametric")
+  # Apply VST to training samples
+  vsd_train <- DESeq2::varianceStabilizingTransformation(
+    dds_train,
+    blind=F,
+    fitType="parametric")
 
   # Extract VST matrix
-  vsd_train_mat <- SummarizedExperiment::assay(vsd_train) %>% round(2)
+  vsd_train_mat <- SummarizedExperiment::assay(vsd_train) %>%
+    round(2)
 
-  # Create training X and y
-  X_train <- t(as.matrix(vsd_train_mat))            
-  # training samples x genes
-  y_train <- (metadata_df_with_folds$LRTI_adjudication[train_idx] == "Definite")
+  # Build training X and y
+  X_train <- t(as.matrix(vsd_train_mat))
+  y_train <- (
+    metadata_df_with_folds$LRTI_adjudication[train_idx] == "Definite"
+  )
 
   
   
+  
+  
 
+  # 3.2b. Fit LASSO lambda path on training data
 
-
-# 3.2b. Find lambda path
-
-
-  # Fit full lambda path
+  
   fit <- glmnet::glmnet(
-    X_train, y_train,
-    family = "binomial",
-    standardize = TRUE)
-  
+    X_train,
+    y_train,
+    family="binomial",
+    standardize=TRUE)
+
 
   
   
   
-
-# 3.2c. Build VST on TEST samples ONLY
   
-  
-  # Identify test samples  
-  test_idx <- metadata_df_with_folds$fold == test_fold
+  # 3.2c. VST using test samples only
 
+  
   # Extract test counts
   test_counts <- cv_host_counts[, test_idx, drop=F]
 
   dds_test <- DESeq2::DESeqDataSetFromMatrix(
     countData = test_counts[rownames(dds_train), , drop=F],
     colData = metadata_df_with_folds[test_idx, , drop=F],
-    design = ~1
-  )
+    design = ~1)
 
-  dds_test <- estimateSizeFactors(dds_test)
+  dds_test <- DESeq2::estimateSizeFactors(dds_test)
 
+  # Use dispersion function estimated from training data
   dispersionFunction(dds_test) <- dispersionFunction(dds_train)
 
   # Apply frozen VST
-  vsd_test <- DESeq2::varianceStabilizingTransformation(dds_test,
-    blind=F, fitType="parametric")
+  vsd_test <- DESeq2::varianceStabilizingTransformation(
+    dds_test,
+    blind=F,
+    fitType="parametric")
 
   # Extract VST matrix
-  vsd_test_mat <- SummarizedExperiment::assay(vsd_test) %>% round(2)
+  vsd_test_mat <- SummarizedExperiment::assay(vsd_test) %>%
+    round(2)
 
-  # Build X_test
-  X_test <- t(as.matrix(vsd_test_mat))
+  
+  
+  
+  
 
+  # 3.2d. Cross-validated LASSO on training data
 
-  # Cross-validated LASSO on training data
+  
   cv_fit <- cv.glmnet(
-    X_train, y_train,
-    family = "binomial",
-    standardize = TRUE,
-    nfolds = nfolds
-  )
-  
-  
-  
-  
-  
-  
-# 3.2d. Select target lambda
-  
-  
-  if (is.null(target_n)) {
+    X_train,
+    y_train,
+    family="binomial",
+    standardize=TRUE,
+    nfolds=nfolds)
 
-    # Extract coefficients at lambda.1se
-    coefs_vec <- coef(fit, s = cv_fit$lambda.1se)[-1, 1]
 
-    # Keep only nonzero coefficients
+  
+  
+  
+  
+  # 3.2e. Extract lambda.1se coefficients
+
+  
+  coefs_lambda <- coef(
+    fit,
+    s=cv_fit$lambda.1se
+  )[-1, 1]
+
+  nonzero_lambda <- coefs_lambda[coefs_lambda != 0]
+
+  lambda_df <- data.frame(
+    gene = names(nonzero_lambda),
+    coef = as.numeric(nonzero_lambda),
+    gene_symbol = ensg2gene[names(nonzero_lambda)],
+    fold = test_fold,
+    stringsAsFactors=F)
+
+  
+  
+  
+  
+
+  # 3.2f. Extract fixed-n coefficients
+
+  
+  extract_fixed_n <- function(target_n) {
+
+    # Number of nonzero coefficients at each lambda
+    nz <- apply(
+      fit$beta,
+      2,
+      function(b) sum(b != 0)
+    )
+
+    # Find lambda selecting target_n genes
+    if (any(nz == target_n)) {
+
+      lambda_target <- fit$lambda[
+        which(nz == target_n)[1]
+      ]
+
+    } else {
+
+      lambda_target <- fit$lambda[
+        which.min(abs(nz - target_n))
+      ]
+    }
+
+    # Extract coefficients
+    coefs_vec <- coef(
+      fit,
+      s=lambda_target
+    )[-1, 1]
+
     nonzero <- coefs_vec[coefs_vec != 0]
 
-      # Predictions for TEST FOLD ONLY
-    pred_vec <- predict(
-      fit, newx = X_test, type = "response", s = cv_fit$lambda.1se)[, 1]
-
-  } else {
-
-    # Fixed-n path
-    nz <- apply(fit$beta, 2, function(b) sum(b != 0))
-
-    if (any(nz == target_n)) {
-      lambda_target <- fit$lambda[which(nz == target_n)[1]]
-    } else {
-      lambda_target <- fit$lambda[which.min(abs(nz - target_n))]
-    }
-
-    coefs_vec <- coef(fit, s = lambda_target)[-1, 1]
-    nonzero   <- coefs_vec[coefs_vec != 0]
-
+    # Keep top target_n genes if too many are selected
     if (length(nonzero) > target_n) {
-      nonzero <- nonzero[order(abs(nonzero), decreasing=TRUE)[1:target_n]]
+
+      nonzero <- nonzero[
+        order(abs(nonzero), decreasing=TRUE)[1:target_n]
+      ]
     }
 
+    # Move toward less penalized lambdas if too few genes are selected
     if (length(nonzero) < target_n) {
-      lam_idx <- which.min(abs(fit$lambda - lambda_target))
-      while (length(nonzero) < target_n && lam_idx < length(fit$lambda)) {
-        lam_idx   <- lam_idx + 1
-        coefs_vec <- coef(fit, s=fit$lambda[lam_idx])[-1, 1]
-        nonzero   <- coefs_vec[coefs_vec != 0]
+
+      lam_idx <- which.min(
+        abs(fit$lambda - lambda_target)
+      )
+
+      while (
+        length(nonzero) < target_n &&
+        lam_idx < length(fit$lambda)
+      ) {
+
+        lam_idx <- lam_idx + 1
+
+        coefs_vec <- coef(
+          fit,
+          s=fit$lambda[lam_idx]
+        )[-1, 1]
+
+        nonzero <- coefs_vec[coefs_vec != 0]
       }
+
+      # If more than target_n are selected, keep the
+      # target_n genes with the largest absolute coefficients
       if (length(nonzero) > target_n) {
-        nonzero <- nonzero[order(abs(nonzero), decreasing=TRUE)[1:target_n]]
+
+        nonzero <- nonzero[
+          order(abs(nonzero), decreasing=TRUE)[1:target_n]
+        ]
       }
     }
 
+    # Confirm exactly target_n genes were selected
     stopifnot(length(nonzero) == target_n)
 
-    pred_vec <- predict(fit, newx=X_test, type="response",
-                        s=lambda_target)[, 1]
+    data.frame(
+      gene = names(nonzero),
+      coef = as.numeric(nonzero),
+      gene_symbol = ensg2gene[names(nonzero)],
+      fold = test_fold,
+      stringsAsFactors=F)
   }
-  
-  
-  
-  
-  
-  
-# 3.2e. Ensure structure and build data frame 
-  
-  
-  # Build prediction data frame
-  preds <- data.frame(
-    sample_name = colnames(test_counts),
-    pred = pred_vec,
-    stringsAsFactors=F)
-  
-  # Build fold-specific coefficient data frame
-  nonzero_df <- data.frame(
-    gene = names(nonzero),
-    coef = as.numeric(nonzero),
-    gene_symbol = ensg2gene[names(nonzero)],
-    fold = test_fold, 
-    stringsAsFactors=F)
 
+
+  # Extract n=3 and n=1 coefficients
+  n3_df <- extract_fixed_n(target_n=3)
+  n1_df <- extract_fixed_n(target_n=1)
+
+
+  # Return fold-specific results
   list(
-    pred = preds,
-    mod = fit, 
-    coef = nonzero_df,
-    vsd_cols = vsd_test_mat)
+    lambda = lambda_df,
+    n3 = n3_df,
+    n1 = n1_df,
+    vsd_cols = vsd_test_mat
+  )
 }
 
 
@@ -250,125 +298,113 @@ lasso_cv_outer_fold <- function(test_fold) {
 # 3.3. Run LASSO across folds
 
 
-# Apply to all folds
 lasso_results <- lapply(
   1:max(metadata_df_with_folds$fold),
   lasso_cv_outer_fold)
 
-vsd_list <- lapply(lasso_results, `[[`, "vsd_cols")
-full_vsd <- do.call(cbind, vsd_list)
 
-# Ensures columns are in the same order as metadata
-full_vsd <- full_vsd[, metadata_df_with_folds$sample_name, drop=F]
+# Collect frozen VST matrices
+vsd_list <- lapply(
+  lasso_results,
+  `[[`,
+  "vsd_cols")
 
-stopifnot(!any(duplicated(colnames(full_vsd))))
-stopifnot(all(colnames(full_vsd) == metadata_df_with_folds$sample_name))
+full_vsd <- do.call(
+  cbind,
+  vsd_list)
 
-# Save the matrix
-write.csv(full_vsd,
-          file.path(data_dir, "vst_full.csv"),
-          row.names=T)
 
-# Collect predictions and coefficients for each fold
-lasso_preds <- lasso_results %>%
-  lapply(function(x) x$pred) %>%
-  bind_rows()
+# Ensure columns are in the same order as metadata
+full_vsd <- full_vsd[
+  ,
+  metadata_df_with_folds$sample_name,
+  drop=F]
 
+
+# Safety checks for VST matrix
+stopifnot(
+  !any(duplicated(colnames(full_vsd))),
+  all(colnames(full_vsd) == metadata_df_with_folds$sample_name)
+)
+
+
+# Save full VST matrix
+write.csv(
+  full_vsd,
+  file.path(data_dir, "vst_full.csv"),
+  row.names=T)
+
+
+# Collect fold-specific LASSO coefficients
 lasso_fold_coefs <- lasso_results %>%
-  lapply(function(x) x$coef) %>%
+  lapply(function(x) x$lambda) %>%
   bind_rows()
 
-coef_filename <- if (is.null(target_n)) "lasso_fold_coefs.csv" else
-                 paste0("lasso_fold_coefs_n", target_n, ".csv")
+lasso_fold_coefs_n3 <- lasso_results %>%
+  lapply(function(x) x$n3) %>%
+  bind_rows()
 
-write.csv(lasso_fold_coefs, file.path(results_dir, coef_filename), row.names=F)
-
-
-
-
-
-
-# 3.4. Safety Check
+lasso_fold_coefs_n1 <- lasso_results %>%
+  lapply(function(x) x$n1) %>%
+  bind_rows()
 
 
-# Summary
-print(table(lasso_fold_coefs$gene_symbol))
+# Save LASSO coefficients
+write.csv(
+  lasso_fold_coefs,
+  file.path(results_dir, "lasso_fold_coefs.csv"),
+  row.names=F)
 
-nrow(lasso_fold_coefs) 
+write.csv(
+  lasso_fold_coefs_n3,
+  file.path(results_dir, "lasso_fold_coefs_n3.csv"),
+  row.names=F)
 
-
-
-
-
-
-# 3.5. Bar Graph
-
-
-gene_freq <- table(lasso_fold_coefs$gene_symbol)
-
-gene_df <- as.data.frame(gene_freq)
-
-colnames(gene_df) = c("gene_symbol", "fold_freq")
+write.csv(
+  lasso_fold_coefs_n1,
+  file.path(results_dir, "lasso_fold_coefs_n1.csv"),
+  row.names=F)
 
 
 
 
 
 
-# 3.5a. Gene frequency plot
+# 3.4. Safety Checks
 
 
-# Plot gene frequencies
-ggplot(
-  gene_df %>% filter(fold_freq > 1),
-  aes(
-    x = reorder(gene_symbol, fold_freq),
-    y = fold_freq)
-  ) +
-  geom_col(fill = "steelblue", width = 0.7) +
-  scale_y_continuous(breaks = 1:5) +
-  labs(
-    title = "Genes Selected Across >1 Fold",
-    x = NULL,
-    y = "Number of folds selected"
-  ) +
-  theme_minimal(base_size = 14)
+# Number of selected genes per fold
+print(table(lasso_fold_coefs$fold))
+
+print(table(lasso_fold_coefs_n3$fold))
+
+print(table(lasso_fold_coefs_n1$fold))
 
 
+# Confirm exactly 3 genes per fold
+stopifnot(
+  all(table(lasso_fold_coefs_n3$fold) == 3)
+)
 
 
+# Confirm exactly 1 gene per fold
+stopifnot(
+  all(table(lasso_fold_coefs_n1$fold) == 1)
+)
 
 
-# 3.5b. Plot top 10 |coefs|
+# Confirm all selected genes have valid symbols
+stopifnot(
+  all(!is.na(lasso_fold_coefs$gene_symbol)),
+  all(!is.na(lasso_fold_coefs_n3$gene_symbol)),
+  all(!is.na(lasso_fold_coefs_n1$gene_symbol))
+)
 
 
-top10coefs <- lasso_fold_coefs %>% 
-    slice_max(order_by = abs(lasso_fold_coefs$coef), n=10)
-
-# Plot top coefs
-ggplot(
-  top10coefs,
-  aes(
-    x = coef,
-    y = interaction(gene_symbol, fold, sep = " | "))
-  ) +
-  geom_col(fill = "#d95f02", width = 0.7) +
-  geom_text(
-  aes(label = round(coef, 3)),
-  hjust = ifelse(top10coefs$coef > 0, -0.1, 1.1),
-  size = 4
-  ) +
-  scale_x_continuous(
-    limits = c(-1.5, 1.5),
-    breaks = seq(-1.5, 1.5, by = 0.5)
-  ) +
-  scale_y_discrete(limits = sort) +
-  labs(
-    title = "Top 10 Genes by |coef|",
-    x = "Coefficient",
-    y = NULL
-  ) +
-  theme_minimal(base_size = 14)
+# Confirm VST sample ordering
+stopifnot(
+  all(colnames(full_vsd) == metadata_df_with_folds$sample_name)
+)
 
 
 

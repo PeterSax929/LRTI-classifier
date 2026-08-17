@@ -29,18 +29,21 @@ results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
 # Import data
 metadata_df_with_folds <- read.csv(
   file.path(data_dir, "patient_info_with_folds.csv"),
-  stringsAsFactors=F)
+  stringsAsFactors=F
+)
 
 protein_mat <- read.csv(
   file.path(data_dir, "protein_mat.csv"),
-  stringsAsFactors=F, check.names=F, row.names=1)
+  stringsAsFactors=F,
+  check.names=F,
+  row.names=1
+)
 
-# Ensure metadata rows are aligned to protein_mat (safety check)
+# Align metadata and protein matrix
 metadata_df_with_folds <- metadata_df_with_folds %>%
   filter(patient_id %in% rownames(protein_mat)) %>%
   column_to_rownames("patient_id")
 
-# Subset protein matrix to matched ordering (safety check)
 protein_mat <- protein_mat[rownames(metadata_df_with_folds), ]
 
 
@@ -51,37 +54,53 @@ protein_mat <- protein_mat[rownames(metadata_df_with_folds), ]
 # 8.2. Limma DA
 
 
-# Create design matrix (Definite vs No Evidence)
+# Define LRTI adjudication
 metadata_df_with_folds$LRTI_adjudication <- factor(
   metadata_df_with_folds$LRTI_adjudication,
-  levels = c("No Evidence", "Definite"))
+  levels = c("No Evidence", "Definite")
+)
 
-metadata_df_with_folds$sex <- factor(metadata_df_with_folds$sex)
-metadata_df_with_folds$age_in_years <- as.numeric(metadata_df_with_folds$age_in_years)
+metadata_df_with_folds$sex <- factor(
+  metadata_df_with_folds$sex
+)
 
+metadata_df_with_folds$age_in_years <- as.numeric(
+  metadata_df_with_folds$age_in_years
+)
+
+# Create design matrix
 design <- model.matrix(
   ~ LRTI_adjudication + age_in_years + sex,
-  data = metadata_df_with_folds)
+  data = metadata_df_with_folds
+)
 
 # Fit linear model
-fit <- lmFit(t(protein_mat), design)   # transpose so features = rows
+fit <- lmFit(
+  t(protein_mat),
+  design
+)
 
 fit <- eBayes(fit)
 
-# Extract results
-res <- topTable(
+# Extract differential abundance results
+res_df <- topTable(
   fit,
   coef = "LRTI_adjudicationDefinite",
   number = Inf,
-  sort.by = "P")
-
-# Convert to dataframe with gene column
-res_df <- res %>%
+  sort.by = "P"
+) %>%
   rownames_to_column("gene") %>%
   mutate(
     padj = adj.P.Val,
-    log2FoldChange = logFC,          
-    negLog10P = -log10(padj + 1e-300))
+    log2FoldChange = logFC,
+    negLog10P = -log10(padj + 1e-300),
+    sig = padj < 0.05,
+    direction = case_when(
+      sig & log2FoldChange > 0 ~ "LRTI",
+      sig & log2FoldChange < 0 ~ "Control",
+      TRUE ~ "NotSignificant"
+    )
+  )
 
 
 
@@ -91,88 +110,218 @@ res_df <- res %>%
 # 8.3. Volcano Plot
 
 
-# 8.3a. Plot content
+# Select proteins to label
+label_data <- bind_rows(
+  res_df %>%
+    filter(direction == "LRTI") %>%
+    arrange(desc(abs(log2FoldChange)), padj) %>%
+    slice_head(n = 10),
+  res_df %>%
+    filter(direction == "Control") %>%
+    arrange(desc(abs(log2FoldChange)), padj) %>%
+    slice_head(n = 10)
+)
 
 
-# Significance flag
-res_df <- res_df %>%
-  mutate(sig = padj < 0.05)
+# Volcano plot
+volcano_plot_prot <- ggplot(
+  res_df,
+  aes(
+    x = log2FoldChange,
+    y = negLog10P
+  )
+) +
 
-# Define direction
-res_df <- res_df %>%
-  mutate(direction = case_when(
-    sig & log2FoldChange > 0  ~ "Definite",
-    sig & log2FoldChange < 0  ~ "NoEvidence",
-    TRUE                      ~ "NotSignificant"
-  ))
+  # Points
+  geom_point(
+    aes(color = direction),
+    alpha = 0.75,
+    size = 2
+  ) +
 
-
-
-
-
-
-# 8.3b. ggplot
-
-
-# Volcano Plot
-ggplot(res_df, aes(x = log2FoldChange, y = negLog10P)) +
-  geom_point(aes(color = direction), alpha = 0.65, size = 1.6) +
   scale_color_manual(
     values = c(
-      "Definite" = "red",
-      "NoEvidence" = "blue",
-      "NotSignificant" = "grey80"
+      "LRTI" = "#D55E00",
+      "Control" = "#8B4789",
+      "NotSignificant" = "grey85"
     ),
-    breaks = c("Definite","NoEvidence"),
-    labels = c(
-      "Definite" = "Upregulated in Definite LRTI",
-      "NoEvidence" = "Downregulated in Definite LRTI"
-    ),
-    name = NULL
+    guide = "none"
   ) +
+
+  # FDR threshold
   geom_hline(
-    yintercept = -log10(0.05), linetype="dashed", linewidth=0.6, color="grey40") +
-  theme_minimal(base_size = 14, base_family = "Helvetica") +
-  theme(
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.caption = element_text(size = 14, face="bold", hjust = 0.5),
-    plot.caption.position = "plot"
+    yintercept = -log10(0.05),
+    linetype = "dashed",
+    linewidth = 0.6,
+    color = "grey40"
   ) +
-  labs(
-    x = expression(log[2]*FC),
-    y = expression(-log[10](P[adj])),
-    title = "Volcano plot - Proteomics Differential Abundance",
-    caption = 
-      paste0("Differentially abundant proteins (FDR < 0.05): ", sum(res_df$sig))
+
+  # Fold-change reference lines
+  geom_vline(
+    xintercept = c(-1, 1),
+    linetype = "dotted",
+    colour = "grey70",
+    linewidth = 0.4
   ) +
-  coord_fixed(ratio = 0.5) +
+
+  # Gene/protein labels
   geom_text_repel(
-  data = bind_rows(
-    res_df %>% filter(direction == "Definite") %>% slice_min(padj, n=10),
-    res_df %>% filter(direction == "NoEvidence") %>% slice_min(padj, n=10)
-  ),
-  aes(label = gene),
+    data = label_data,
+    aes(label = gene),
     size = 3.2,
-    fontface = "bold",
+    fontface = "plain",
     max.overlaps = Inf,
-    box.padding = 0.5,
-    point.padding = 0.3,
+    box.padding = 0.7,
+    point.padding = 0.5,
     segment.color = "grey60",
     segment.size = 0.3
+  ) +
+
+  # Direction arrows
+  annotate(
+    "segment",
+    x = -0.3,
+    xend = -1.7,
+    y = 6.0,
+    yend = 6.0,
+    linewidth = 0.7,
+    colour = "#8B4789",
+    arrow = arrow(
+      length = unit(0.18, "cm"),
+      type = "closed"
+    )
+  ) +
+
+  annotate(
+    "text",
+    x = -1.0,
+    y = 5.7,
+    label = "Downregulated in LRTI",
+    size = 3.8,
+    colour = "#8B4789"
+  ) +
+
+  annotate(
+    "segment",
+    x = 0.3,
+    xend = 1.7,
+    y = 6.0,
+    yend = 6.0,
+    linewidth = 0.7,
+    colour = "#D55E00",
+    arrow = arrow(
+      length = unit(0.18, "cm"),
+      type = "closed"
+    )
+  ) +
+
+  annotate(
+    "text",
+    x = 1.0,
+    y = 5.7,
+    label = "Upregulated in LRTI",
+    size = 3.8,
+    colour = "#D55E00"
+  ) +
+
+  # DE protein count
+  annotate(
+    "text",
+    x = 0,
+    y = 3.9,
+    label = paste0(
+      format(sum(res_df$sig), big.mark = ","),
+      " DA proteins"
+    ),
+    size = 3.8,
+    family = "Arial",
+    colour = "black"
+  ) +
+
+  # Theme
+  theme_classic(
+    base_size = 12,
+    base_family = "Arial"
+  ) +
+
+  theme(
+    text = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain"
+    ),
+    axis.title = element_text(
+      family = "Arial",
+      size = 12,
+      colour = "black",
+      face = "plain"
+    ),
+    axis.text = element_text(
+      family = "Arial",
+      size = 12,
+      colour = "black",
+      face = "plain"
+    ),
+    axis.line = element_line(
+      colour = "black",
+      linewidth = 0.5
+    ),
+    plot.title = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      colour = "black",
+      hjust = 0.5
+    ),
+    plot.margin = margin(10, 15, 10, 10)
+  ) +
+
+  labs(
+    x = expression(log[2]*" fold change"),
+    y = expression(-log[10](P[adj])),
+    title = "Proteomic differential abundance"
+  ) +
+  
+  scale_y_continuous(
+  expand = expansion(mult = c(0.02, 0.15))
   )
 
+
+print(volcano_plot_prot)
+
+
 # Save results
-write.csv(res_df,
-          file.path(results_dir, "DA_results_proteomics.csv"),
-          row.names=F)
+write.csv(
+  res_df,
+  file.path(results_dir, "DA_results_proteomics.csv"),
+  row.names = F
+)
 
-ggsave(file.path(results_dir, "volcano_proteome.png"),
-       width = 8, height = 10, dpi = 600)
 
+# Save editable vector PDF
+ggsave(
+  file.path(results_dir, "volcano_proteome.pdf"),
+  volcano_plot_prot,
+  width = 6.5,
+  height = 6.5,
+  device = cairo_pdf,
+  bg = "white"
+)
 
+# Save plot object for patchwork
+saveRDS(
+  volcano_plot_prot,
+  file.path(
+    results_dir,
+    "volcano_proteome.rds"
+  )
+)
 
 
 
 
 ```
+
+
+
+

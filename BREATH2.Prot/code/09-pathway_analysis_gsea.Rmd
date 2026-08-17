@@ -7,7 +7,6 @@ output:
 
 ```{r, warning=F, message=F}
 
-
 library(clusterProfiler)
 library(msigdbr)
 library(org.Hs.eg.db)
@@ -17,35 +16,27 @@ library(enrichplot)
 library(stringr)
 
 
-
-
-
-
 # 9.1. Import data
 
-
-# Set file paths
 
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
 
 res_df <- read.csv(
   file.path(results_dir, "DA_results_proteomics.csv"),
-  stringsAsFactors=F)
+  stringsAsFactors = F
+)
 
 
 
 
 
 
-# 9.2. Ranked Proteins List
+# 9.2. Create ranked protein list
 
 
-# Use protein IDs and log2FC
 protein_ranks <- res_df$log2FoldChange
 names(protein_ranks) <- res_df$gene
-
-# Sort decreasing 
-protein_ranks <- sort(protein_ranks, decreasing=T)
+protein_ranks <- sort(protein_ranks, decreasing = T)
 
 
 
@@ -56,14 +47,15 @@ protein_ranks <- sort(protein_ranks, decreasing=T)
 
 
 hallmark_sets <- msigdbr(
-  species  = "Homo sapiens",
+  species = "Homo sapiens",
   category = "H"
 ) %>%
   dplyr::select(gs_name, gene_symbol)
 
 set.seed(8634782)
+
 gsea_hallmark_prot <- GSEA(
-  geneList  = protein_ranks,
+  geneList = protein_ranks,
   TERM2GENE = hallmark_sets,
   pvalueCutoff = 0.05,
   eps = 0,
@@ -75,7 +67,8 @@ hallmark_df_prot <- as.data.frame(gsea_hallmark_prot)
 write.csv(
   hallmark_df_prot,
   file.path(results_dir, "GSEA_Hallmark_proteome.csv"),
-  row.names=F)
+  row.names = F
+)
 
 
 
@@ -86,15 +79,16 @@ write.csv(
 
 
 reactome_sets <- msigdbr(
-  species     = "Homo sapiens",
-  category    = "C2",
+  species = "Homo sapiens",
+  category = "C2",
   subcategory = "CP:REACTOME"
 ) %>%
   dplyr::select(gs_name, gene_symbol)
 
 set.seed(8634782)
+
 gsea_reactome_prot <- GSEA(
-  geneList  = protein_ranks,
+  geneList = protein_ranks,
   TERM2GENE = reactome_sets,
   pvalueCutoff = 0.05,
   eps = 0,
@@ -106,14 +100,15 @@ reactome_df_prot <- as.data.frame(gsea_reactome_prot)
 write.csv(
   reactome_df_prot,
   file.path(results_dir, "GSEA_Reactome_proteome.csv"),
-  row.names=F)
+  row.names = F
+)
 
 
 
 
 
 
-# 9.5. Hallmark Pathway Plots
+# 9.5. Hallmark pathway plots
 
 
 # View top Hallmark pathways by NES
@@ -123,25 +118,31 @@ gsea_hallmark_prot@result %>%
   dplyr::select(ID, Description, NES, p.adjust) %>%
   head(10)
 
-# IFNγ
+
+# IFN-gamma
 p_ifng_prot <- gseaplot2(
   gsea_hallmark_prot,
   geneSetID = "HALLMARK_INTERFERON_GAMMA_RESPONSE",
   title = "Protein Hallmark IFNγ Response",
   base_size = 12,
-  subplots = c(1,2,3))
+  subplots = c(1, 2, 3)
+)
 
-# IFNα
+
+# IFN-alpha
 p_ifna_prot <- gseaplot2(
   gsea_hallmark_prot,
   geneSetID = "HALLMARK_INTERFERON_ALPHA_RESPONSE",
   title = "Protein Hallmark IFNα Response",
   base_size = 12,
-  subplots = c(1,2,3))
+  subplots = c(1, 2, 3)
+)
 
-# Print plots
+
+# Display plots
 p_ifng_prot
 p_ifna_prot
+
 
 # Save plots
 ggsave(
@@ -163,7 +164,7 @@ ggsave(
 
 
 
-# 9.6. Reactome Pathway Plot
+# 9.6. Reactome pathway plot
 
 
 # View top Reactome pathways
@@ -173,20 +174,24 @@ gsea_reactome_prot@result %>%
   dplyr::select(ID, Description, NES, p.adjust) %>%
   head(10)
 
+
 p_reactome_digest_prot <- gseaplot2(
   gsea_reactome_prot,
   geneSetID = "REACTOME_DIGESTION",
   title = "Protein Reactome: Digestion",
   base_size = 12,
-  subplots = c(1, 2, 3))
+  subplots = c(1, 2, 3)
+)
 
-# Print plot
+
+# Display plot
 p_reactome_digest_prot
+
 
 # Save plot
 ggsave(
-  filename = file.path(results_dir, "GSEA_Reactome_Digestion_protein.pdf"),
-  plot = p_reactome_digest_prot,
+  file.path(results_dir, "GSEA_Reactome_Digestion_protein.pdf"),
+  p_reactome_digest_prot,
   width = 7,
   height = 6
 )
@@ -196,72 +201,156 @@ ggsave(
 
 
 
-# 9.7. Hallmark GSEA summary dot plot
+# 9.7. GSEA summary dot-plot function
 
 
-# Prepare Hallmark plot data
-hallmark_plot_prot_df <- gsea_hallmark_prot@result %>%
-  filter(p.adjust < 0.05) %>%
-  mutate(
-    neglogPadj = -log10(p.adjust),
-    Direction = ifelse(NES > 0, "Up", "Down")
-  )
-
-# Top 8 Up
-hallmark_top_up_prot <- hallmark_plot_prot_df %>%
-  filter(NES > 0) %>%
-  arrange(desc(NES)) %>%
-  slice_head(n = 8)
-
-# Top 8 Down
-hallmark_top_down_prot <- hallmark_plot_prot_df %>%
-  filter(NES < 0) %>%
-  arrange(NES) %>%
-  slice_head(n = 8)
-
-hallmark_top16_prot <- bind_rows(hallmark_top_up_prot, hallmark_top_down_prot) %>%
-  mutate(
-    Description = gsub("^HALLMARK_", "", Description),
-    Description = gsub("_", " ", Description),
-    Description = str_wrap(Description, width = 20),
-    Description = factor(Description, levels = Description[order(NES)])
-  )
-
-# Plot
-p_hallmark_all_prot <- ggplot(
-  hallmark_top16_prot,
-  aes(y = Description, x = NES)
+make_gsea_summary_plot <- function(
+    gsea_result,
+    prefix,
+    top_n = 8,
+    wrap_width = 20,
+    x_limits = c(-2, 4),
+    y_text_size = 9) {
+  
+  plot_df <- gsea_result@result %>%
+    filter(p.adjust < 0.05) %>%
+    mutate(
+      Direction = ifelse(NES > 0, "Up", "Down")
+    )
+  
+  top_up <- plot_df %>%
+    filter(NES > 0) %>%
+    arrange(desc(NES)) %>%
+    slice_head(n = top_n)
+  
+  top_down <- plot_df %>%
+    filter(NES < 0) %>%
+    arrange(NES) %>%
+    slice_head(n = top_n)
+  
+  top_pathways <- bind_rows(top_up, top_down) %>%
+    mutate(
+      Description = gsub(
+        paste0("^", prefix),
+        "",
+        Description
+      ),
+      Description = gsub("_", " ", Description),
+      Description = str_wrap(
+        Description,
+        width = wrap_width
+      ),
+      Description = factor(
+        Description,
+        levels = Description[order(NES)]
+      )
+    )
+  
+  ggplot(
+    top_pathways,
+    aes(y = Description, x = NES)
   ) +
-  geom_vline(xintercept = 0, linewidth = 0.8, color = "black") +
-  geom_segment(aes(x = 0, xend = NES, yend = Description), linewidth = 0.7, color = "grey50") +
-  # Black outline
-  geom_point(aes(fill = Direction), shape = 21, size = 5, color = "black",  stroke = 1.6) +
-  scale_fill_manual(
-    values = c("Up" = "red3", "Down" = "blue3"),
-    breaks = c("Up", "Down"),
-    labels = c(
-      "Up" = "Upregulated in Definite LRTI",
-      "Down" = "Downregulated in Definite LRTI"
-    ),
-    name = NULL
-  ) +
-  theme_classic(base_size = 14, base_family = "Helvetica") +
-  theme(
-    legend.position     = "bottom",
-    legend.direction    = "horizontal",
-    legend.justification = "center",
-    legend.text         = element_text(size = 11, face = "bold"),
-    legend.title        = element_blank(),
-    legend.key.size     = unit(1.4, "lines"),
-    axis.text.y         = element_text(size = 9,  face = "bold", color = "black"),
-    axis.text.x         = element_text(size = 11, face = "bold", color = "black"),
-    axis.title.x        = element_text(size = 12, face = "bold"),
-    plot.title          = element_text(hjust = 0.5, face = "bold", size = 14),
-    plot.subtitle       = element_text(hjust = 0.5, size = 10, color = "grey30"),
-    plot.title.position = "plot",
-    plot.margin         = ggplot2::margin(t = 10, r = 60, b = 10, l = 10),
-    panel.grid.major.x  = element_line(color = "grey92", linewidth = 0.4)
-  ) +
+    geom_vline(
+      xintercept = 0,
+      linewidth = 0.8,
+      color = "black"
+    ) +
+    geom_segment(
+      aes(
+        x = 0,
+        xend = NES,
+        yend = Description
+      ),
+      linewidth = 0.7,
+      color = "grey50"
+    ) +
+    geom_point(
+      aes(fill = Direction),
+      shape = 21,
+      size = 5,
+      color = "black",
+      stroke = 1.6
+    ) +
+    scale_fill_manual(
+      values = c(
+        "Up" = "#D55E00",
+        "Down" = "#8B4789"
+      ),
+      breaks = c("Up", "Down"),
+      labels = c(
+        "Up" = "Upregulated in Definite LRTI",
+        "Down" = "Downregulated in Definite LRTI"
+      ),
+      name = NULL
+    ) +
+    theme_classic(
+      base_size = 14,
+      base_family = "Helvetica"
+    ) +
+    theme(
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.justification = "center",
+      legend.text = element_text(
+        size = 11,
+        face = "bold"
+      ),
+      legend.title = element_blank(),
+      legend.key.size = unit(1.4, "lines"),
+      axis.text.y = element_text(
+        size = y_text_size,
+        face = "bold",
+        color = "black"
+      ),
+      axis.text.x = element_text(
+        size = 11,
+        face = "bold",
+        color = "black"
+      ),
+      axis.title.x = element_text(
+        size = 12,
+        face = "bold"
+      ),
+      plot.title = element_text(
+        hjust = 0.5,
+        face = "bold",
+        size = 14
+      ),
+      plot.subtitle = element_text(
+        hjust = 0.5,
+        size = 10,
+        color = "grey30"
+      ),
+      plot.title.position = "plot",
+      plot.margin = ggplot2::margin(
+        t = 10,
+        r = 60,
+        b = 10,
+        l = 10
+      ),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        linewidth = 0.4
+      )
+    )
+}
+
+
+
+
+
+
+# 9.8. Hallmark GSEA summary dot plot
+
+
+p_hallmark_all_prot <- make_gsea_summary_plot(
+  gsea_result = gsea_hallmark_prot,
+  prefix = "HALLMARK_",
+  top_n = 8,
+  wrap_width = 20,
+  x_limits = c(-2, 4),
+  y_text_size = 9
+) +
   labs(
     title = "Hallmark Pathway Enrichment (Protein GSEA)",
     subtitle = "Top significant Hallmark pathways",
@@ -270,16 +359,21 @@ p_hallmark_all_prot <- ggplot(
   ) +
   xlim(-2, 4)
 
-# Show plot
+
+# Display plot
 p_hallmark_all_prot
+
 
 # Save plot
 ggsave(
-  filename    = file.path(results_dir, "GSEA_Hallmark_protein.pdf"),
-  plot        = p_hallmark_all_prot,
-  width       = 7,
-  height      = 6,
-  device      = "pdf",
+  filename = file.path(
+    results_dir,
+    "GSEA_Hallmark_protein.pdf"
+  ),
+  plot = p_hallmark_all_prot,
+  width = 7,
+  height = 6,
+  device = "pdf",
   useDingbats = FALSE
 )
 
@@ -288,72 +382,17 @@ ggsave(
 
 
 
-# 9.8. Reactome GSEA summary dot plot
+# 9.9. Reactome GSEA summary dot plot
 
 
-# Prepare Reactome plot data
-reactome_plot_prot_df <- gsea_reactome_prot@result %>%
-  filter(p.adjust < 0.05) %>%
-  mutate(
-    neglogPadj = -log10(p.adjust),
-    Direction = ifelse(NES > 0, "Up", "Down")
-  )
-
-# Top 8 Up
-reactome_top_up_prot <- reactome_plot_prot_df %>%
-  filter(NES > 0) %>%
-  arrange(desc(NES)) %>%
-  slice_head(n = 8)
-
-# Top 8 Down
-reactome_top_down_prot <- reactome_plot_prot_df %>%
-  filter(NES < 0) %>%
-  arrange(NES) %>%
-  slice_head(n = 8)
-
-reactome_top16_prot <- bind_rows(reactome_top_up_prot, reactome_top_down_prot) %>%
-  mutate(
-    Description = gsub("^REACTOME_", "", Description),
-    Description = gsub("_", " ", Description),
-    Description = str_wrap(Description, width = 40),
-    Description = factor(Description, levels = Description[order(NES)])
-  )
-
-# Plot Reactome protein top 16
-p_reactome_top16_prot <- ggplot(
-  reactome_top16_prot,
-  aes(y = Description, x = NES)
-  ) +
-  geom_vline(xintercept = 0, linewidth = 0.8, color = "black") +
-  geom_segment(aes(x = 0, xend = NES, yend = Description), linewidth = 0.7, color = "grey50") +
-  # Black outline
-  geom_point(aes(fill = Direction), shape = 21, size = 5, color = "black", stroke = 1.6) +
-  scale_fill_manual(
-    values = c("Up" = "red3", "Down" = "blue3"),
-    breaks = c("Up", "Down"),
-    labels = c(
-      "Up" = "Upregulated in Definite LRTI",
-      "Down" = "Downregulated in Definite LRTI"
-    ),
-    name = NULL
-  ) +
-  theme_classic(base_size = 14, base_family = "Helvetica") +
-  theme(
-    legend.position     = "bottom",
-    legend.direction    = "horizontal",
-    legend.justification = "center",
-    legend.text         = element_text(size = 11, face = "bold"),
-    legend.title        = element_blank(),
-    legend.key.size     = unit(1.4, "lines"),
-    axis.text.y         = element_text(size = 8,  face = "bold", color = "black"),
-    axis.text.x         = element_text(size = 11, face = "bold", color = "black"),
-    axis.title.x        = element_text(size = 12, face = "bold"),
-    plot.title          = element_text(hjust = 0.5, face = "bold", size = 14),
-    plot.subtitle       = element_text(hjust = 0.5, size = 10, color = "grey30"),
-    plot.title.position = "plot",
-    plot.margin         = ggplot2::margin(t = 10, r = 60, b = 10, l = 10),
-    panel.grid.major.x  = element_line(color = "grey92", linewidth = 0.4)
-  ) +
+p_reactome_top16_prot <- make_gsea_summary_plot(
+  gsea_result = gsea_reactome_prot,
+  prefix = "REACTOME_",
+  top_n = 8,
+  wrap_width = 40,
+  x_limits = c(-3, 4),
+  y_text_size = 8
+) +
   labs(
     title = "Reactome Pathway Enrichment (Protein GSEA)",
     subtitle = "Top Up & Down significant Reactome pathways",
@@ -362,18 +401,24 @@ p_reactome_top16_prot <- ggplot(
   ) +
   xlim(-3, 4)
 
-# Show plot
+
+# Display plot
 p_reactome_top16_prot
+
 
 # Save plot
 ggsave(
-  filename    = file.path(results_dir, "GSEA_Reactome_protein.pdf"),
-  plot        = p_reactome_top16_prot,
-  width       = 8,
-  height      = 8,
-  device      = "pdf",
+  filename = file.path(
+    results_dir,
+    "GSEA_Reactome_protein.pdf"
+  ),
+  plot = p_reactome_top16_prot,
+  width = 8,
+  height = 8,
+  device = "pdf",
   useDingbats = FALSE
 )
+
 
 
 

@@ -24,15 +24,19 @@ library(ggrepel)
 data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
-# RNA vst matrix (genes x samples)
+# RNA VST matrix (genes x samples)
 full_vsd <- read.csv(
   file.path(data_dir, "vst_full.csv"),
-  check.names=F, row.names=1)
+  check.names = F,
+  row.names = 1
+)
 
-# Protein log2-normalized abundances matrix (samples x proteins)
+# Protein log2-normalized abundance matrix (samples x proteins)
 protein_mat <- read.csv(
   "C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv",
-  check.names=F, row.names=1)
+  check.names = F,
+  row.names = 1
+)
 
 
 
@@ -44,12 +48,27 @@ protein_mat <- read.csv(
 
 rna_mean <- data.frame(
   gene = rownames(full_vsd),
-  mean_rna_vst = rowMeans(full_vsd, na.rm=T)
+  mean_rna_vst = rowMeans(full_vsd, na.rm = T)
+) %>%
+  mutate(
+    gene_symbol = ensg2gene$gene_symbol[
+    match(gene, ensg2gene$X)
+   ],
+    gene_symbol = ifelse(
+      is.na(gene_symbol),
+      gene,
+      gene_symbol
+    )
   ) %>%
-  mutate(gene_symbol = ifelse(is.na(ensg2gene[gene]),
-  gene, ensg2gene[gene])) %>%
+  filter(
+    !is.na(gene_symbol),
+    gene_symbol != ""
+  ) %>%
   group_by(gene_symbol) %>%
-  summarize(mean_rna_vst = mean(mean_rna_vst, na.rm=T), .groups="drop")
+  summarize(
+    mean_rna_vst = mean(mean_rna_vst, na.rm = T),
+    .groups = "drop"
+  )
 
 
 
@@ -61,7 +80,19 @@ rna_mean <- data.frame(
 
 protein_mean <- data.frame(
   gene_symbol = colnames(protein_mat),
-  mean_protein_log2 = colMeans(protein_mat, na.rm=T)
+  mean_protein_log2 = colMeans(
+    protein_mat,
+    na.rm = T
+  )
+) %>%
+  filter(
+    !is.na(gene_symbol),
+    gene_symbol != ""
+  ) %>%
+  group_by(gene_symbol) %>%
+  summarize(
+    mean_protein_log2 = mean(mean_protein_log2, na.rm = T),
+    .groups = "drop"
   )
 
 
@@ -78,17 +109,20 @@ loglog_df <- inner_join(
   by = "gene_symbol"
 )
 
-# Identify top genes by combined mean abundance (RNA + protein)
+# Identify highly abundant genes for labeling
 label_df <- loglog_df %>%
-  mutate(total_abundance = mean_rna_vst + mean_protein_log2) %>%
+  mutate(
+    total_abundance = mean_rna_vst + mean_protein_log2
+  ) %>%
   arrange(desc(total_abundance)) %>%
-  head(20)
+  slice_head(n = 20)
 
-# Correlation
+# Spearman correlation
 cor_spearman <- cor(
   loglog_df$mean_rna_vst,
   loglog_df$mean_protein_log2,
-  method = "spearman"
+  method = "spearman",
+  use = "complete.obs"
 )
 
 
@@ -99,44 +133,124 @@ cor_spearman <- cor(
 # 8.5. Log-log abundance plot
 
 
-min_x <- min(loglog_df$mean_rna_vst, na.rm=T)
+min_x <- min(
+  loglog_df$mean_rna_vst,
+  na.rm = T
+)
 
-ggplot(
+loglog_plot <- ggplot(
   loglog_df,
-  aes(x = mean_rna_vst, y = mean_protein_log2)
+  aes(
+    x = mean_rna_vst,
+    y = mean_protein_log2
+  )
+) +
+
+  geom_point(
+    alpha = 0.25,
+    size = 1,
+    color = "grey30"
   ) +
-  geom_point(alpha = 0.25, size = 1, color = "grey30") +
-  geom_smooth(method="loess", span=0.75, se=TRUE,
-            color="firebrick", fill="firebrick",
-            alpha=0.15, linewidth=0.8) +
+
+  geom_smooth(
+    method = "loess",
+    span = 0.75,
+    se = TRUE,
+    color = "firebrick",
+    fill = "firebrick",
+    alpha = 0.15,
+    linewidth = 0.8
+  ) +
+
   geom_text_repel(
     data = label_df,
     aes(label = gene_symbol),
     size = 3,
+    fontface = "plain",
     max.overlaps = 20,
     box.padding = 0.4,
     segment.color = "grey70"
   ) +
+
   coord_cartesian(
     xlim = c(min_x, 15),
     ylim = c(min_x, 18)
   ) +
-  theme_classic() +
+
+  theme_classic(
+    base_size = 12,
+    base_family = "Arial"
+  ) +
+
+  theme(
+    text = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain"
+    ),
+    axis.text = element_text(
+      family = "Arial",
+      size = 12,
+      color = "black",
+      face = "plain"
+    ),
+    axis.title = element_text(
+      family = "Arial",
+      size = 12,
+      color = "black",
+      face = "plain"
+    ),
+    axis.line = element_line(
+      color = "black",
+      linewidth = 0.5
+    ),
+    plot.title = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      color = "black",
+      hjust = 0.5
+    ),
+    plot.subtitle = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      color = "black",
+      hjust = 0.5
+    ),
+    plot.margin = margin(10, 15, 10, 10)
+  ) +
+
   labs(
     x = "Mean RNA expression (VST)",
     y = expression("Mean protein abundance (log"[2]*")"),
     title = "RNA–Protein Abundance Relationship",
     subtitle = paste0(
-      "Spearman \u03C1 = ", round(cor_spearman, 2),
-      " | n = ", nrow(loglog_df)
+      "Spearman \u03C1 = ",
+      formatC(
+        cor_spearman,
+        format = "f",
+        digits = 2
+      )
     )
-  ) 
-  
-  
+  )
+
+
+print(loglog_plot)
+
+
+# Save editable vector PDF
+
 ggsave(
-  file.path(results_dir, "RNA_protein_loglog_abundance.pdf"),
-  width = 6,
-  height = 6
+  file.path(
+    results_dir,
+    "RNA_protein_loglog_abundance.pdf"
+  ),
+  loglog_plot,
+  width = 6.5,
+  height = 6.5,
+  device = cairo_pdf,
+  bg = "white"
 )
 
 
@@ -144,4 +258,6 @@ ggsave(
 
 
 
-``` 
+```
+
+

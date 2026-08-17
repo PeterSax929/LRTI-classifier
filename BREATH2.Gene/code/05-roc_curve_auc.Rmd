@@ -18,177 +18,172 @@ library(ggplot2)
 
 
 
-# 5.1. Import metadata & preds
+# 5.1. Import metadata & predictions
 
 
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+data_dir    <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
 results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
 
-# Import fold assignments
-metadata_df_with_folds <- read.csv(
-  file.path(data_dir, "metadata_df_with_folds.csv"),
-  stringsAsFactors=F)
-
 patient_info_with_folds <- read.csv(
-  file.path(
-  "C:/Users/User/Documents/UCSF/BREATH2.Prot/data/patient_info_with_folds.csv"), stringsAsFactors=F)
+  file.path(data_dir, "metadata_df_with_folds.csv"),
+  stringsAsFactors = FALSE
+)
 
-# Import out-of-fold predictions
-lassoRF_preds_gene <- read.csv(
-  file.path(results_dir, "lassoRF_preds.csv"),
-  stringsAsFactors=F)
+# All prediction files
+classifier_files <- tibble(
+  classifier = c(
+    "Full LASSO",
+    "3-feature LASSO",
+    "1-feature LASSO",
+    "FABP4",
+    "ISG15"
+  ),
+  csv = c(
+    "lassoRF_preds.csv",
+    "lassoRF_preds_n3.csv",
+    "lassoRF_preds_n1.csv",
+    "lassoRF_preds_FABP4.csv",
+    "lassoRF_preds_ISG15.csv"
+  ),
+  suffix = c(
+    "",
+    "n3",
+    "n1",
+    "FABP4",
+    "ISG15"
+  )
+)
 
-# Import protein preds
-lassoRF_preds_prot <- read.csv(
-  file.path(
-  "C:/Users/User/Documents/UCSF/BREATH2.Prot/results/lassoRF_preds.csv"),
-  stringsAsFactors=F)
-
-# Merge protein fold assignments
-lassoRF_preds_prot <- lassoRF_preds_prot %>%
-  left_join(
-    patient_info_with_folds %>% dplyr::select(patient_id, fold),
-    by = "patient_id")
-
-# Ensure consistent factor levels
-lassoRF_preds_gene$LRTI_adjudication <- factor(
-  lassoRF_preds_gene$LRTI_adjudication,
-  levels = c("No Evidence", "Definite"))
-
-# Merge
-merged_preds <- lassoRF_preds_gene %>%
-  dplyr::inner_join(metadata_df_with_folds %>% 
-  dplyr::select(sample_name, fold),
-    by = "sample_name")
-
+# Import all five prediction files
+pred_list <- classifier_files %>%
+  mutate(
+    preds = lapply(csv, function(f) {
+      read.csv(
+        file.path(results_dir, f),
+        stringsAsFactors = FALSE
+      ) %>%
+        mutate(
+          LRTI_adjudication = factor(
+            LRTI_adjudication,
+            levels = c("No Evidence", "Definite")
+          )
+        ) %>%
+        inner_join(
+          patient_info_with_folds %>%
+            select(sample_name, fold),
+          by = "sample_name"
+        )
+    })
+  )
 
 
 
 
 
-# 5.2. Per-fold AUC
+
+# 5.2. AUC helper function
 
 
 output_auc_roc <- function(preds_df, output_suffix) {
 
-  # Compute per-fold AUC
+  # Per-fold AUC
   auc_df <- preds_df %>%
     group_by(fold) %>%
     summarize({
-    roc_obj <- pROC::roc(
-    response  = factor(LRTI_adjudication, levels = c("No Evidence", "Definite")),
-    predictor = pred,
-    direction = "<"
-  )
-  ci_vals <- pROC::ci.auc(roc_obj, conf.level = 0.95)
-  tibble(
-    auc = as.numeric(roc_obj$auc),
-    auc_lower = ci_vals[1],
-    auc_upper = ci_vals[3]
-    )
-  }, .groups = "drop")
+      roc_obj <- pROC::roc(
+        response = factor(
+          LRTI_adjudication,
+          levels = c("No Evidence", "Definite")
+        ),
+        predictor = pred,
+        direction = "<"
+      )
 
-  # Determine number of folds
-  max_fold <- max(auc_df$fold)
+      ci_vals <- pROC::ci.auc(roc_obj)
 
-  # Create ROC PDF (all folds overlayed)
-  pdf(file.path(results_dir, paste0("ROC_", output_suffix, ".pdf")))
+      tibble(
+        auc = as.numeric(roc_obj$auc),
+        auc_lower = ci_vals[1],
+        auc_upper = ci_vals[3]
+      )
+    }, .groups = "drop")
 
-  for (i in 1:max_fold) {
-    fold_data <- preds_df %>% filter(fold == i)
-
-    roc_obj <- pROC::roc(
-      response  = factor(fold_data$LRTI_adjudication,
-        levels = c("No Evidence", "Definite")),
-      predictor = fold_data$pred,
-      direction = "<"
-    )
-
-    plot(roc_obj, add = (i != 1), col = i)
-  }
-
-  dev.off()
-
-  # Save per-fold AUC CSV at the very end
+  # Save per-fold AUC
   write.csv(
     auc_df,
-    file.path(results_dir, paste0("cv_auc_", output_suffix, ".csv")),
-    row.names=F)
+    file.path(
+      results_dir,
+      paste0(
+        "cv_auc",
+        ifelse(output_suffix == "", "", paste0("_", output_suffix)),
+        ".csv"
+      )
+    ),
+    row.names = FALSE
+  )
 
-  return(auc_df)
-}
-
-
-
-
-
-
-# 5.3. Plot Graph
-
-
-# Run AUC computation
-auc_lassoRF <- output_auc_roc(merged_preds, "lassoRF")
-
-max_fold <- max(auc_lassoRF$fold)
-
-# Open empty plot for overlay with top-left orientation
-plot(0, 0, type = "n",
-     xlim = c(1, 0), ylim = c(0, 1),
-     xlab = "Specificity", ylab = "Sensitivity",
-     main = "ROC Curves by Fold")
-
-# Add diagonal reference
-lines(x = c(1, 0), y = c(0, 1), lty = 2, col = "gray")
-
-for (i in 1:max_fold) {
-  fold_data <- merged_preds %>% filter(fold == i)
-
-  roc_obj <- pROC::roc(
-    response  = factor(fold_data$LRTI_adjudication,
-      levels = c("No Evidence", "Definite")),
-    predictor = fold_data$pred,
+  # Pooled ROC
+  pooled_roc <- pROC::roc(
+    response = factor(
+      preds_df$LRTI_adjudication,
+      levels = c("No Evidence", "Definite")
+    ),
+    predictor = preds_df$pred,
     direction = "<"
   )
 
-  # Plot specificity directly: axis direction flips via xlim
-  lines(roc_obj$specificities, roc_obj$sensitivities, col = i, lwd = 2)
+  # Pooled DeLong 95% CI
+  ci_auc <- pROC::ci.auc(pooled_roc)
+
+  pooled_summary <- data.frame(
+    auc   = as.numeric(ci_auc[2]),
+    lower = ci_auc[1],
+    upper = ci_auc[3]
+  )
+
+  # Save pooled AUC
+  write.csv(
+    pooled_summary,
+    file.path(
+      results_dir,
+      paste0(
+        "pooled_auc",
+        ifelse(output_suffix == "", "", paste0("_", output_suffix)),
+        ".csv"
+      )
+    ),
+    row.names = FALSE
+  )
+
+  list(
+    fold_auc = auc_df,
+    pooled = pooled_summary
+  )
 }
 
-legend("bottomright", legend = paste("Fold", 1:max_fold), col = 1:max_fold, lwd = 2)
 
 
 
 
 
+# 5.3. Run all five classifiers
 
-# 5.4. Summaries
 
+auc_results <- pred_list %>%
+  mutate(
+    results = Map(
+      output_auc_roc,
+      preds,
+      suffix
+    )
+  )
 
-# DeLong 95% CI for overall ROC
-ci_auc <- pROC::ci.auc(
-  pROC::roc(
-    response = factor(merged_preds$LRTI_adjudication, 
-    levels = c("No Evidence", "Definite")),
-    predictor = merged_preds$pred,
-    direction = "<"
-  ),
-  conf.level = 0.95
-)
+# Full LASSO objects retained for downstream sections
+merged_preds <- pred_list$preds[[1]]
 
-mean_auc <- as.numeric(ci_auc[2])
-lower_auc <- ci_auc[1]
-upper_auc <- ci_auc[3]
+auc_lassoRF <- auc_results$results[[1]]$fold_auc
 
-message(
-  "AUC summary: ",
-  round(mean_auc, 3),
-  " (95% CI: ",
-  round(lower_auc, 3),
-  "–",
-  round(upper_auc, 3),
-  ")"
-)
-
+# Print full LASSO AUC
 print(auc_lassoRF)
 
 
@@ -196,193 +191,1515 @@ print(auc_lassoRF)
 
 
 
-# 5.5. Gene / Protein adjudication plot
+# 5.4. Full LASSO summary
 
 
-# Combine rf_preds for gene and prot into one data frame
-combined_preds <- metadata_df_with_folds %>%
-  dplyr::select(sample_name, patient_id) %>%
-  inner_join(lassoRF_preds_gene, by = "sample_name") %>%
-  inner_join(
-    lassoRF_preds_prot %>%
-      dplyr::select(patient_id, pred_prot = pred),
-    by = "patient_id"
+ci_auc <- read.csv(
+  file.path(results_dir, "pooled_auc.csv")
+)
+
+message(
+  "Full LASSO AUC: ",
+  round(ci_auc$auc, 2),
+  " (95% CI: ",
+  round(ci_auc$lower, 2),
+  "–",
+  round(ci_auc$upper, 2),
+  ")"
+)
+
+
+
+
+
+
+# 5.5. Forest plots
+
+
+# Gene-only forest plot
+# Includes all five classifiers, including 1-feature LASSO
+
+forest_data_gene <- auc_results %>%
+  transmute(
+    classifier,
+    auc   = sapply(results, function(x) x$pooled$auc),
+    lower = sapply(results, function(x) x$pooled$lower),
+    upper = sapply(results, function(x) x$pooled$upper)
   ) %>%
-  dplyr::rename(pred_gene = pred) %>%
-  dplyr::select(sample_name, patient_id, LRTI_adjudication, pred_gene, pred_prot)
-
-
-
-
-
-
-# 5.5a. Plot2
-
-combined_preds <- combined_preds %>%
   mutate(
-    switched = (pred_gene >= 0.5) != (pred_prot >= 0.5),
-    LRTI_adjudication = factor(LRTI_adjudication, levels = c("Definite", "No Evidence"))
+    classifier = factor(
+      classifier,
+      levels = c(
+        "ISG15",
+        "FABP4",
+        "1-feature LASSO",
+        "3-feature LASSO",
+        "Full LASSO"
+      )
+    )
   )
 
-# Switched patient ids
-switched_patients <- combined_preds %>%
-  filter(switched) %>%
-  dplyr::select(sample_name, patient_id, LRTI_adjudication, pred_gene, pred_prot) %>%
-  arrange(LRTI_adjudication, desc(abs(pred_gene - pred_prot)))
+print(forest_data_gene)
 
-ggplot(combined_preds) +
-  # Non-switcher lines
-  geom_segment(
-    data = combined_preds %>% filter(!switched),
-    aes(x = 1, xend = 2, y = pred_gene, yend = pred_prot),
-    color = "grey82", linewidth = 0.4
-  ) +
-  # Switcher lines
-  geom_segment(
-    data = combined_preds %>% filter(switched),
-    aes(x = 1, xend = 2, y = pred_gene, yend = pred_prot),
-    color = "grey40", linewidth = 1
-  ) +
-  # Gene dots
+
+# Gene-only forest plot
+forest_plot_gene <- ggplot(
+  forest_data_gene,
+  aes(y = classifier)
+) +
   geom_point(
-    aes(x = 1, y = pred_gene, color = LRTI_adjudication),
-    size = 2.4, alpha = 0.9
+    aes(x = auc),
+    size = 4,
+    shape = 18
   ) +
-  # Protein dots
-  geom_point(
-    aes(x = 2, y = pred_prot, color = LRTI_adjudication),
-    size = 2.4, alpha = 0.9
+  geom_errorbarh(
+    aes(
+      xmin = lower,
+      xmax = upper
+    ),
+    height = 0.2,
+    linewidth = 0.8
   ) +
-  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey40", linewidth = 0.5) +
-  scale_color_manual(
-    values = c("Definite" = "red", "No Evidence" = "#0072B2"),
-    breaks = c("Definite", "No Evidence")
+  geom_text(
+    aes(
+      x = upper + 0.03,
+      label = sprintf(
+        "%.2f (%.2f–%.2f)",
+        auc,
+        lower,
+        upper
+      )
+    ),
+    hjust = 0,
+    size = 3.5,
+    fontface = "bold"
   ) +
   scale_x_continuous(
-    breaks = c(1, 2),
-    labels = c("Gene", "Protein"),
-    limits = c(0.7, 2.3)
+    limits = c(0.5, 1.15),
+    breaks = seq(0.5, 1.0, 0.1)
   ) +
-  scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.25, 0.5, 0.75, 1)) +
-  facet_wrap(~ LRTI_adjudication, ncol = 2) +
   labs(
-    title = "Classifier Prediction Shift: Gene vs. Protein Workflow",
-    subtitle = paste0(
-  "Dark lines = patients who switched classification at 0.5 threshold (n = ",
-  sum(combined_preds$switched),")"),
-    x = NULL,
-    y = "RF predicted P(LRTI)",
-    color = "LRTI adjudication"
+    title = "AUROC comparison across gene classifiers",
+    subtitle = "Point estimates with 95% DeLong confidence intervals",
+    x = "AUROC",
+    y = NULL
   ) +
   theme_classic(base_size = 13) +
   theme(
-    text = element_text(family = "Helvetica", face = "bold"),
-    axis.text = element_text(face = "bold"),
-    strip.text = element_text(face = "bold", size = 13),
-    legend.position = "bottom",
-    legend.title = element_text(face = "bold"),
-    legend.text = element_text(face = "bold")
+    text = element_text(
+      family = "Helvetica",
+      face = "bold"
+    ),
+    axis.text = element_text(
+      face = "bold"
+    ),
+    plot.title = element_text(
+      face = "bold",
+      size = 14
+    ),
+    plot.subtitle = element_text(
+      face = "plain",
+      size = 11
+    )
   )
 
+print(forest_plot_gene)
+
 ggsave(
-  file.path(results_dir, "gene_vs_protein_pred_shift.pdf"),
-  width = 7, height = 5
+  file.path(
+    results_dir,
+    "forest_plot_gene_classifiers.pdf"
+  ),
+  forest_plot_gene,
+  width = 10,
+  height = 5
 )
 
-write.csv(switched_patients,
-  file.path(results_dir, "switched_patients.csv"),
-  row.names=F)
+write.csv(
+  forest_data_gene,
+  file.path(
+    results_dir,
+    "forest_data_gene_classifiers.csv"
+  ),
+  row.names = FALSE
+)
 
 
 
 
 
 
+# 5.5b. Forest Plot – Gene + Protein Classifiers
+
+
+# Import protein forest data
+prot_results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+
+forest_data_prot <- read.csv(
+  file.path(prot_results_dir, "forest_data_protein_classifiers.csv"),
+  stringsAsFactors = FALSE
+) %>%
+  filter(classifier != "1-feature LASSO") %>%
+  mutate(workflow = "Protein")
+
+# Prepare gene data
+forest_data_gene_combined <- forest_data_gene %>%
+  filter(classifier != "1-feature LASSO") %>%
+  mutate(workflow = "Gene")
+
+# Combine gene + protein
+forest_data_combined <- bind_rows(
+  forest_data_gene_combined,
+  forest_data_prot
+) %>%
+  mutate(
+    classifier = factor(
+      classifier,
+      levels = c(
+        "ISG15",
+        "FABP4",
+        "3-feature LASSO",
+        "Full LASSO"
+      )
+    ),
+    workflow = factor(
+      workflow,
+      levels = c("Gene", "Protein")
+    )
+  )
+
+print(forest_data_combined)
+
+
+# Combined forest plot
+forest_plot_combined <- ggplot(
+  forest_data_combined,
+  aes(y = classifier, color = workflow)
+) +
+
+  geom_point(
+    aes(x = auc),
+    size = 3.5,
+    position = position_dodge(width = 0.5)
+  ) +
+
+  geom_errorbarh(
+    aes(xmin = lower, xmax = upper),
+    height = 0.25,
+    linewidth = 0.7,
+    position = position_dodge(width = 0.5)
+  ) +
+
+  geom_text(
+    aes(
+      x = 1.03,
+      y = classifier,
+      label = sprintf(
+        "%.2f (%.2f–%.2f)",
+        auc,
+        lower,
+        upper
+      ),
+      group = workflow
+    ),
+    position = position_dodge(width = 0.5),
+    inherit.aes = FALSE,
+    color = "black",
+    hjust = 0,
+    size = 3.2,
+    family = "Arial"
+  ) +
+
+  scale_color_manual(
+    values = c(
+      "Gene" = "#0072B2",
+      "Protein" = "#009E73"
+    ),
+    name = NULL
+  ) +
+
+  scale_x_continuous(
+    limits = c(0.64, 1.18),
+    breaks = seq(0.7, 1.0, 0.1),
+    labels = scales::number_format(accuracy = 0.01),
+    expand = c(0, 0)
+  ) +
+
+  labs(
+    title = "AUROC comparison: gene vs protein classifiers",
+    x = "AUC value",
+    y = NULL
+  ) +
+
+  theme_classic(
+    base_size = 12,
+    base_family = "Arial"
+  ) +
+
+  theme(
+    text = element_text(
+      family = "Arial",
+      size = 12
+    ),
+    axis.text = element_text(
+      family = "Arial",
+      size = 12,
+      color = "black"
+    ),
+    axis.title = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain"
+    ),
+    plot.title = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      hjust = 0.5
+    ),
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(
+      family = "Arial",
+      size = 12
+    )
+  )
+
+print(forest_plot_combined)
+
+
+# Save plot
+ggsave(
+  file.path(
+    results_dir,
+    "forest_plot_gene_protein_combined.pdf"
+  ),
+  forest_plot_combined,
+  width = 6.5,
+  height = 6.5,
+  device = cairo_pdf,
+  bg = "white"
+)
+
+
+# Save combined summary table
+write.csv(
+  forest_data_combined,
+  file.path(
+    results_dir,
+    "forest_data_gene_protein_combined.csv"
+  ),
+  row.names = FALSE
+)
 
 
 
-# 5.6. Late Integration — Logistic Regression on Gene + Protein Probabilities
+
+
+
+# 5.6. Full LASSO vs 3-gene classifier ROC curves
+
+
+# Prepare predictions from objects already created in 5.1
+lassoRF_preds_lambda <- pred_list$preds[[which(
+  classifier_files$classifier == "Full LASSO"
+)]]
+
+lassoRF_preds_n3 <- pred_list$preds[[which(
+  classifier_files$classifier == "3-feature LASSO"
+)]]
+
+
+# Compute ROC objects
+roc_lambda <- pROC::roc(
+  response = lassoRF_preds_lambda$LRTI_adjudication,
+  predictor = lassoRF_preds_lambda$pred,
+  direction = "<",
+  ci = TRUE
+)
+
+roc_n3 <- pROC::roc(
+  response = lassoRF_preds_n3$LRTI_adjudication,
+  predictor = lassoRF_preds_n3$pred,
+  direction = "<",
+  ci = TRUE
+)
+
+
+# Prepare ROC data frames for ggplot
+roc_lambda_df_gene <- data.frame(
+  specificity = roc_lambda$specificities,
+  sensitivity = roc_lambda$sensitivities,
+  classifier  = "Full LASSO"
+) %>%
+  arrange(specificity, sensitivity)
+
+roc_n3_df_gene <- data.frame(
+  specificity = roc_n3$specificities,
+  sensitivity = roc_n3$sensitivities,
+  classifier  = "3-gene classifier"
+) %>%
+  arrange(specificity, sensitivity)
+
+roc_combined_gene <- bind_rows(
+  roc_lambda_df_gene,
+  roc_n3_df_gene
+) %>%
+  mutate(
+    classifier = factor(
+      classifier,
+      levels = c("Full LASSO", "3-gene classifier")
+    )
+  )
+
+
+# Prepare CI ribbon data frames
+ci_lambda <- pROC::ci.se(
+  roc_lambda,
+  specificities = seq(0, 1, 0.01)
+)
+
+ci_n3 <- pROC::ci.se(
+  roc_n3,
+  specificities = seq(0, 1, 0.01)
+)
+
+ci_lambda_df_gene <- data.frame(
+  specificity       = as.numeric(rownames(ci_lambda)),
+  sensitivity_lower = ci_lambda[, 1],
+  sensitivity_upper = ci_lambda[, 3],
+  classifier        = "Full LASSO"
+) %>%
+  arrange(specificity)
+
+ci_n3_df_gene <- data.frame(
+  specificity       = as.numeric(rownames(ci_n3)),
+  sensitivity_lower = ci_n3[, 1],
+  sensitivity_upper = ci_n3[, 3],
+  classifier        = "3-gene classifier"
+) %>%
+  arrange(specificity)
+
+ci_combined_gene <- bind_rows(
+  ci_lambda_df_gene,
+  ci_n3_df_gene
+) %>%
+  mutate(
+    classifier = factor(
+      classifier,
+      levels = c("Full LASSO", "3-gene classifier")
+    )
+  )
+
+
+# Get pooled AUC values already calculated in 5.3
+auc_lambda <- auc_results$results[[which(
+  classifier_files$classifier == "Full LASSO"
+)]]$pooled
+
+auc_n3 <- auc_results$results[[which(
+  classifier_files$classifier == "3-feature LASSO"
+)]]$pooled
+
+
+# Legend labels with AUC values
+classifier_labels_gene <- c(
+  "Full LASSO" = sprintf(
+    "Full LASSO: AUC = %.2f (%.2f–%.2f)",
+    auc_lambda$auc,
+    auc_lambda$lower,
+    auc_lambda$upper
+  ),
+  "3-gene classifier" = sprintf(
+    "3-gene classifier: AUC = %.2f (%.2f–%.2f)",
+    auc_n3$auc,
+    auc_n3$lower,
+    auc_n3$upper
+  )
+)
+
+
+# Create ROC plot
+roc_plot_gg_gene <- ggplot() +
+
+  # Diagonal reference line
+  geom_abline(
+    intercept = 1,
+    slope = -1,
+    linetype = "dashed",
+    color = "grey80",
+    linewidth = 0.8,
+    show.legend = FALSE
+  ) +
+
+  # Confidence interval ribbons
+  geom_ribbon(
+    data = ci_combined_gene,
+    aes(
+      x = specificity,
+      ymin = sensitivity_lower,
+      ymax = sensitivity_upper,
+      fill = classifier,
+      group = classifier
+    ),
+    alpha = 0.12
+  ) +
+
+  # ROC curves
+  geom_line(
+    data = roc_combined_gene,
+    aes(
+      x = specificity,
+      y = sensitivity,
+      color = classifier,
+      group = classifier
+    ),
+    linewidth = 1
+  ) +
+
+  # Axes
+  scale_x_reverse(
+    breaks = seq(0, 1, 0.2),
+    labels = sprintf("%.1f", seq(0, 1, 0.2))
+  ) +
+
+  scale_y_continuous(
+    breaks = seq(0, 1, 0.2),
+    limits = c(0, 1)
+  ) +
+
+  # Colors
+  scale_color_manual(
+    values = c(
+      "Full LASSO" = "#CC79A7",
+      "3-gene classifier" = "#56B4E9"
+    ),
+    labels = classifier_labels_gene,
+    name = NULL
+  ) +
+
+  scale_fill_manual(
+    values = c(
+      "Full LASSO" = "#CC79A7",
+      "3-gene classifier" = "#56B4E9"
+    ),
+    name = NULL,
+    guide = "none"
+  ) +
+
+  coord_fixed() +
+
+  # Labels
+  labs(
+    title = "Full LASSO vs 3-gene classifier",
+    x = "Specificity",
+    y = "Sensitivity"
+  ) +
+
+  # Theme
+  theme_classic(
+    base_size = 12,
+    base_family = "Arial"
+  ) +
+
+  theme(
+    text = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain"
+    ),
+    axis.text = element_text(
+      family = "Arial",
+      size = 12,
+      color = "black"
+    ),
+    axis.title = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain"
+    ),
+    plot.title = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain",
+      hjust = 0.5
+    ),
+    legend.text = element_text(
+      family = "Arial",
+      size = 12,
+      face = "plain"
+    ),
+    legend.key.size = unit(1.2, "lines"),
+    legend.position = c(0.62, 0.18),
+    legend.background = element_rect(
+      fill = "white",
+      color = NA
+    )
+  )
+
+
+print(roc_plot_gg_gene)
+
+
+# Export as editable vector PDF
+ggsave(
+  file.path(
+    results_dir,
+    "ROC_lambda_vs_n3_overlaid_gene_gg.pdf"
+  ),
+  roc_plot_gg_gene,
+  width = 6.5,
+  height = 6.5,
+  device = cairo_pdf,
+  bg = "white"
+)
+
+
+# DeLong test
+delong_test_gene <- pROC::roc.test(
+  roc_lambda,
+  roc_n3,
+  method = "delong"
+)
+
+message(
+  "DeLong test p-value: ",
+  signif(delong_test_gene$p.value, 3)
+)
+
+
+
+
+
+
+# 5.7. Gene vs protein ROC curves for individual biomarkers
+
+
+# Protein results directory
+prot_results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+
+
+# Function to create gene vs protein ROC plot
+make_biomarker_roc_plot <- function(
+  biomarker_name,
+  gene_file,
+  protein_file,
+  output_file
+) {
+
+  # Read gene predictions
+  gene_preds <- read.csv(
+    file.path(results_dir, gene_file),
+    stringsAsFactors = FALSE
+  )
+
+  # Read protein predictions
+  protein_preds <- read.csv(
+    file.path(prot_results_dir, protein_file),
+    stringsAsFactors = FALSE
+  )
+
+  # Ensure consistent factor levels
+  gene_preds$LRTI_adjudication <- factor(
+    gene_preds$LRTI_adjudication,
+    levels = c("No Evidence", "Definite")
+  )
+
+  protein_preds$LRTI_adjudication <- factor(
+    protein_preds$LRTI_adjudication,
+    levels = c("No Evidence", "Definite")
+  )
+
+
+  # Compute ROC objects
+  roc_gene <- pROC::roc(
+    response = gene_preds$LRTI_adjudication,
+    predictor = gene_preds$pred,
+    direction = "<",
+    ci = TRUE
+  )
+
+  roc_protein <- pROC::roc(
+    response = protein_preds$LRTI_adjudication,
+    predictor = protein_preds$pred,
+    direction = "<",
+    ci = TRUE
+  )
+
+
+  # Prepare ROC data frames
+  roc_gene_df <- data.frame(
+    specificity = roc_gene$specificities,
+    sensitivity = roc_gene$sensitivities,
+    classifier = "Gene"
+  ) %>%
+    arrange(specificity, sensitivity)
+
+  roc_protein_df <- data.frame(
+    specificity = roc_protein$specificities,
+    sensitivity = roc_protein$sensitivities,
+    classifier = "Protein"
+  ) %>%
+    arrange(specificity, sensitivity)
+
+  roc_combined <- bind_rows(
+    roc_gene_df,
+    roc_protein_df
+  ) %>%
+    mutate(
+      classifier = factor(
+        classifier,
+        levels = c("Gene", "Protein")
+      )
+    )
+
+
+  # Prepare confidence interval data
+  ci_gene <- pROC::ci.se(
+    roc_gene,
+    specificities = seq(0, 1, 0.01)
+  )
+
+  ci_protein <- pROC::ci.se(
+    roc_protein,
+    specificities = seq(0, 1, 0.01)
+  )
+
+
+  ci_gene_df <- data.frame(
+    specificity       = as.numeric(rownames(ci_gene)),
+    sensitivity_lower = ci_gene[, 1],
+    sensitivity_upper = ci_gene[, 3],
+    classifier        = "Gene"
+  ) %>%
+    arrange(specificity)
+
+  ci_protein_df <- data.frame(
+    specificity       = as.numeric(rownames(ci_protein)),
+    sensitivity_lower = ci_protein[, 1],
+    sensitivity_upper = ci_protein[, 3],
+    classifier        = "Protein"
+  ) %>%
+    arrange(specificity)
+
+  ci_combined <- bind_rows(
+    ci_gene_df,
+    ci_protein_df
+  ) %>%
+    mutate(
+      classifier = factor(
+        classifier,
+        levels = c("Gene", "Protein")
+      )
+    )
+
+
+  # Pooled AUC values and 95% CIs
+  auc_ci_gene <- pROC::ci.auc(roc_gene)
+  auc_ci_protein <- pROC::ci.auc(roc_protein)
+
+
+  # Legend labels
+  classifier_labels <- c(
+    "Gene" = sprintf(
+      "Gene: AUC = %.2f (%.2f–%.2f)",
+      auc_ci_gene[2],
+      auc_ci_gene[1],
+      auc_ci_gene[3]
+    ),
+    "Protein" = sprintf(
+      "Protein: AUC = %.2f (%.2f–%.2f)",
+      auc_ci_protein[2],
+      auc_ci_protein[1],
+      auc_ci_protein[3]
+    )
+  )
+
+
+  # Create ROC plot
+  roc_plot <- ggplot() +
+
+    # Diagonal reference line
+    geom_abline(
+      intercept = 1,
+      slope = -1,
+      linetype = "dashed",
+      color = "grey80",
+      linewidth = 0.8,
+      show.legend = FALSE
+    ) +
+
+    # Confidence interval ribbons
+    geom_ribbon(
+      data = ci_combined,
+      aes(
+        x = specificity,
+        ymin = sensitivity_lower,
+        ymax = sensitivity_upper,
+        fill = classifier,
+        group = classifier
+      ),
+      alpha = 0.12
+    ) +
+
+    # ROC curves
+    geom_line(
+      data = roc_combined,
+      aes(
+        x = specificity,
+        y = sensitivity,
+        color = classifier,
+        group = classifier
+      ),
+      linewidth = 1
+    ) +
+
+    # Axes
+    scale_x_reverse(
+      breaks = seq(0, 1, 0.2),
+      labels = sprintf("%.1f", seq(0, 1, 0.2))
+    ) +
+
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1)
+    ) +
+
+    # Colors
+    scale_color_manual(
+      values = c(
+        "Gene" = "#0072B2",
+        "Protein" = "#009E73"
+      ),
+      labels = classifier_labels,
+      name = NULL
+    ) +
+
+    scale_fill_manual(
+      values = c(
+        "Gene" = "#0072B2",
+        "Protein" = "#009E73"
+      ),
+      name = NULL,
+      guide = "none"
+    ) +
+
+    coord_fixed() +
+
+    # Labels
+    labs(
+      title = paste0(biomarker_name, ": gene vs protein"),
+      x = "Specificity",
+      y = "Sensitivity"
+    ) +
+
+    # Theme
+    theme_classic(
+      base_size = 12,
+      base_family = "Arial"
+    ) +
+
+    theme(
+      text = element_text(
+        family = "Arial",
+        size = 12,
+        face = "plain"
+      ),
+      axis.text = element_text(
+        family = "Arial",
+        size = 12,
+        color = "black"
+      ),
+      axis.title = element_text(
+        family = "Arial",
+        size = 12,
+        face = "plain"
+      ),
+      plot.title = element_text(
+        family = "Arial",
+        size = 12,
+        face = "plain",
+        hjust = 0.5
+      ),
+      legend.text = element_text(
+        family = "Arial",
+        size = 12,
+        face = "plain"
+      ),
+      legend.key.size = unit(1.2, "lines"),
+      legend.position = c(0.62, 0.18),
+      legend.background = element_rect(
+        fill = "white",
+        color = NA
+      )
+    )
+
+
+  # Print plot
+  print(roc_plot)
+
+
+  # Export as editable vector PDF
+  ggsave(
+    file.path(results_dir, output_file),
+    roc_plot,
+    width = 6.5,
+    height = 6.5,
+    device = cairo_pdf,
+    bg = "white"
+  )
+
+
+  # DeLong test
+  delong_test <- pROC::roc.test(
+    roc_gene,
+    roc_protein,
+    method = "delong"
+  )
+
+
+  # Print AUC summaries
+  message(
+    biomarker_name,
+    " Gene AUC: ",
+    round(auc_ci_gene[2], 2),
+    " (95% CI: ",
+    round(auc_ci_gene[1], 2),
+    "–",
+    round(auc_ci_gene[3], 2),
+    ")"
+  )
+
+  message(
+    biomarker_name,
+    " Protein AUC: ",
+    round(auc_ci_protein[2], 2),
+    " (95% CI: ",
+    round(auc_ci_protein[1], 2),
+    "–",
+    round(auc_ci_protein[3], 2),
+    ")"
+  )
+
+  message(
+    biomarker_name,
+    " Gene vs Protein DeLong p-value: ",
+    signif(delong_test$p.value, 3)
+  )
+
+
+  # Return results
+  invisible(
+    list(
+      roc_gene = roc_gene,
+      roc_protein = roc_protein,
+      auc_gene = auc_ci_gene,
+      auc_protein = auc_ci_protein,
+      delong = delong_test
+    )
+  )
+}
+
+
+
+
+
+
+# 5.7a. FABP4: gene vs protein
+
+results_FABP4 <- make_biomarker_roc_plot(
+  biomarker_name = "FABP4",
+  gene_file = "lassoRF_preds_FABP4.csv",
+  protein_file = "lassoRF_preds_FABP4.csv",
+  output_file = "ROC_FABP4_gene_vs_prot_gg.pdf"
+)
+
+
+
+
+
+
+# 5.7b. ISG15: gene vs protein
+
+results_ISG15 <- make_biomarker_roc_plot(
+  biomarker_name = "ISG15",
+  gene_file = "lassoRF_preds_ISG15.csv",
+  protein_file = "lassoRF_preds_ISG15.csv",
+  output_file = "ROC_ISG15_gene_vs_prot_gg.pdf"
+)
+
+
+
+
+
+
+# 5.8. Gene / Protein adjudication plots
+
+
+# Protein results directory
+prot_results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+
+
+# Helper function to make gene vs protein prediction-shift plot
+
+make_switch_plot <- function(
+    classifier_name,
+    gene_filename,
+    output_filename
+) {
+
+  # Read gene predictions
+  gene_preds <- read.csv(
+    file.path(results_dir, gene_filename),
+    stringsAsFactors = FALSE
+  ) %>%
+    dplyr::select(
+      sample_name,
+      LRTI_adjudication,
+      pred_gene = pred
+    )
+
+  # Read protein predictions
+  prot_preds <- read.csv(
+    file.path(prot_results_dir, gene_filename),
+    stringsAsFactors = FALSE
+  ) %>%
+    dplyr::select(
+      patient_id,
+      pred_prot = pred
+    ) %>%
+    mutate(
+      patient_id = as.character(patient_id)
+    )
+
+
+  # Use metadata to connect gene sample_name to protein patient_id
+  combined_preds <- gene_preds %>%
+    left_join(
+      metadata_df_with_folds %>%
+        dplyr::select(
+          sample_name,
+          patient_id
+        ) %>%
+        mutate(
+          patient_id = as.character(patient_id)
+        ),
+      by = "sample_name"
+    ) %>%
+    inner_join(
+      prot_preds,
+      by = "patient_id"
+    ) %>%
+    mutate(
+      switched = (pred_gene >= 0.5) != (pred_prot >= 0.5),
+      LRTI_adjudication = factor(
+        LRTI_adjudication,
+        levels = c("Definite", "No Evidence")
+      )
+    ) %>%
+    dplyr::select(
+      sample_name,
+      patient_id,
+      LRTI_adjudication,
+      pred_gene,
+      pred_prot,
+      switched
+    )
+
+
+  # Check that matching worked
+  message(
+    classifier_name,
+    ": ",
+    nrow(combined_preds),
+    " matched patients"
+  )
+
+  message(
+    classifier_name,
+    ": ",
+    sum(combined_preds$switched),
+    " switched patients"
+  )
+
+
+  # Facet labels
+  facet_labels <- c(
+  "Definite" = "LRTI",
+  "No Evidence" = "Control"
+  )
+
+
+  # Plot
+  p <- ggplot(combined_preds) +
+
+    # Non-switcher lines
+    geom_segment(
+      data = combined_preds %>%
+        filter(!switched),
+      aes(
+        x = 1,
+        xend = 2,
+        y = pred_gene,
+        yend = pred_prot
+      ),
+      color = "grey88",
+      linewidth = 0.4
+    ) +
+
+    # Switcher lines
+    geom_segment(
+      data = combined_preds %>%
+        filter(switched),
+      aes(
+        x = 1,
+        xend = 2,
+        y = pred_gene,
+        yend = pred_prot
+      ),
+      color = "grey40",
+      linewidth = 1
+    ) +
+
+    # Gene predictions
+    geom_point(
+      aes(
+        x = 1,
+        y = pred_gene,
+        color = LRTI_adjudication
+      ),
+      size = 2.8,
+      alpha = 0.9
+    ) +
+
+    # Protein predictions
+    geom_point(
+      aes(
+        x = 2,
+        y = pred_prot,
+        color = LRTI_adjudication
+      ),
+      size = 2.8,
+      alpha = 0.9
+    ) +
+    
+    # Classification threshold
+    geom_hline(
+      yintercept = 0.5,
+      linetype = "dashed",
+      color = "grey40",
+      linewidth = 0.5
+    ) +
+
+    scale_color_manual(
+      values = c(
+        "Definite" = "#D55E00",
+        "No Evidence" = "#8B4789"
+      ),
+      breaks = c(
+        "Definite",
+        "No Evidence"
+      ),
+      labels = c(
+        "Definite" = "LRTI",
+        "No Evidence" = "Control"
+      )
+    ) +
+
+    scale_x_continuous(
+      breaks = c(1, 2),
+      labels = c("Gene", "Protein"),
+      limits = c(0.7, 2.3)
+    ) +
+
+    scale_y_continuous(
+      limits = c(0, 1),
+      breaks = c(0, 0.25, 0.5, 0.75, 1)
+    ) +
+
+    facet_wrap(
+      ~LRTI_adjudication,
+      ncol = 2,
+      labeller = labeller(
+        LRTI_adjudication = facet_labels
+      )
+    ) +
+
+    labs(
+      title = paste0(
+        "Prediction shift: gene vs protein (",
+        classifier_name,
+        ")"
+      ),
+      x = NULL,
+      y = "Predicted LRTI probability"
+    ) +
+
+    theme_classic(
+      base_size = 12,
+      base_family = "Arial"
+    ) +
+
+    theme(
+      text = element_text(
+        family = "Arial",
+        size = 12,
+        face = "plain"
+      ),
+      axis.text = element_text(
+        family = "Arial",
+        size = 12,
+        color = "black",
+        face = "plain"
+      ),
+      axis.title = element_text(
+        family = "Arial",
+        size = 12,
+        face = "plain"
+      ),
+      strip.text = element_text(
+        family = "Arial",
+        size = 12,
+        face = "plain"
+      ),
+      plot.title = element_text(
+        family = "Arial",
+        size = 12,
+        face = "plain",
+        hjust = 0.5
+      ),
+      legend.position = "none"
+    )
+
+
+  # Display plot
+  print(p)
+
+
+  # Save PDF
+  ggsave(
+    filename = file.path(results_dir, output_filename),
+    plot = p,
+    width = 6.5,
+    height = 6.5,
+    device = cairo_pdf,
+    bg = "white"
+  )
+
+
+  # Return the data and plot
+  invisible(
+    list(
+      plot = p,
+      combined_preds = combined_preds,
+      switched_patients = combined_preds %>%
+        filter(switched)
+    )
+  )
+}
+
+
+# Full LASSO
+
+switch_full_lasso <- make_switch_plot(
+  classifier_name = "Full LASSO",
+  gene_filename = "lassoRF_preds.csv",
+  output_filename = "gene_vs_protein_pred_shift.pdf"
+)
+
+
+# 3-feature LASSO
+
+switch_n3 <- make_switch_plot(
+  classifier_name = "3-feature LASSO",
+  gene_filename = "lassoRF_preds_n3.csv",
+  output_filename = "gene_vs_protein_pred_shift_n3.pdf"
+)
+
+
+# 1-feature LASSO
+
+switch_n1 <- make_switch_plot(
+  classifier_name = "1-feature LASSO",
+  gene_filename = "lassoRF_preds_n1.csv",
+  output_filename = "gene_vs_protein_pred_shift_n1.pdf"
+)
+
+
+# FABP4
+
+switch_FABP4 <- make_switch_plot(
+  classifier_name = "FABP4",
+  gene_filename = "lassoRF_preds_FABP4.csv",
+  output_filename = "gene_vs_protein_pred_shift_FABP4.pdf"
+)
+
+
+# ISG15
+
+switch_ISG15 <- make_switch_plot(
+  classifier_name = "ISG15",
+  gene_filename = "lassoRF_preds_ISG15.csv",
+  output_filename = "gene_vs_protein_pred_shift_ISG15.pdf"
+)
+
+
+
+
+
+
+# 5.9. Late Integration — Logistic Regression on Gene + Protein Probabilities
+
+
+# Import Full LASSO gene predictions
+gene_preds_full <- read.csv(
+  file.path(results_dir, "lassoRF_preds.csv"),
+  stringsAsFactors = FALSE
+)
+
+# Import Full LASSO protein predictions
+prot_preds_full <- read.csv(
+  file.path(
+    "C:/Users/User/Documents/UCSF/BREATH2.Prot/results",
+    "lassoRF_preds.csv"
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Match gene sample names to protein patient IDs using metadata
+combined_preds <- metadata_df_with_folds %>%
+  dplyr::select(
+    sample_name,
+    patient_id,
+    LRTI_adjudication
+  ) %>%
+  inner_join(
+    gene_preds_full %>%
+      dplyr::select(
+        sample_name,
+        pred_gene = pred
+      ),
+    by = "sample_name"
+  ) %>%
+  inner_join(
+    prot_preds_full %>%
+      dplyr::select(
+        patient_id,
+        pred_prot = pred
+      ),
+    by = "patient_id"
+  ) %>%
+  dplyr::select(
+    sample_name,
+    patient_id,
+    LRTI_adjudication,
+    pred_gene,
+    pred_prot
+  )
+
+
+# Check that the expected 105 patients were matched
+
+message(
+  "Matched patients for late integration: ",
+  nrow(combined_preds)
+)
+
+if (nrow(combined_preds) != 105) {
+  warning(
+    "Expected 105 matched patients, but found ",
+    nrow(combined_preds),
+    "."
+  )
+}
+
 
 # Apply logit transformation to both probability streams
-# Regularize away from 0/1 first (same approach as JCI paper equation 2)
+# Regularize away from 0/1 first
+
 n_trees <- 10000
 epsilon <- 1 / n_trees
 
 combined_preds_logit <- combined_preds %>%
   mutate(
-    pred_gene_reg  = pmax(pmin(pred_gene, 1 - epsilon), epsilon),
-    pred_prot_reg  = pmax(pmin(pred_prot, 1 - epsilon), epsilon),
-    logit_gene     = log(pred_gene_reg / (1 - pred_gene_reg)),
-    logit_prot     = log(pred_prot_reg / (1 - pred_prot_reg)),
-    y              = as.integer(LRTI_adjudication == "Definite")
+    pred_gene_reg = pmax(
+      pmin(pred_gene, 1 - epsilon),
+      epsilon
+    ),
+    pred_prot_reg = pmax(
+      pmin(pred_prot, 1 - epsilon),
+      epsilon
+    ),
+    logit_gene = log(
+      pred_gene_reg / (1 - pred_gene_reg)
+    ),
+    logit_prot = log(
+      pred_prot_reg / (1 - pred_prot_reg)
+    ),
+    y = as.integer(
+      LRTI_adjudication == "Definite"
+    )
   ) %>%
-  inner_join(metadata_df_with_folds %>% dplyr::select(sample_name, fold),
-             by = "sample_name")
-
-# Fit integrated logistic regression per fold (train on 4 folds, predict on 1)
-integrated_preds <- lapply(1:max(combined_preds_logit$fold), function(f) {
-
-  train_df <- combined_preds_logit %>% filter(fold != f)
-  test_df  <- combined_preds_logit %>% filter(fold == f)
-
-  # Fit logistic regression on training folds
-  logit_fit <- glm(
-    y ~ logit_gene + logit_prot,
-    data   = train_df,
-    family = binomial
+  inner_join(
+    metadata_df_with_folds %>%
+      dplyr::select(
+        sample_name,
+        fold
+      ),
+    by = "sample_name"
   )
 
-  # Predict on test fold
-  data.frame(
-    sample_name       = test_df$sample_name,
-    LRTI_adjudication = test_df$LRTI_adjudication,
-    pred              = predict(logit_fit, newdata=test_df, type="response"),
-    fold              = f
-  )
-}) %>%
+
+# Fit integrated logistic regression per fold
+# Train on 4 folds and predict on 1
+
+integrated_preds <- lapply(
+  sort(unique(combined_preds_logit$fold)),
+  function(f) {
+
+    train_df <- combined_preds_logit %>%
+      filter(fold != f)
+
+    test_df <- combined_preds_logit %>%
+      filter(fold == f)
+
+    logit_fit <- glm(
+      y ~ logit_gene + logit_prot,
+      data = train_df,
+      family = binomial
+    )
+
+    data.frame(
+      sample_name = test_df$sample_name,
+      LRTI_adjudication = test_df$LRTI_adjudication,
+      pred = predict(
+        logit_fit,
+        newdata = test_df,
+        type = "response"
+      ),
+      fold = f
+    )
+  }
+) %>%
   bind_rows()
 
-# Compute AUC
-auc_integrated <- output_auc_roc(integrated_preds, "integrated")
 
-# DeLong CI for integrated model
-ci_integrated <- pROC::ci.auc(
-  pROC::roc(
-    response  = factor(integrated_preds$LRTI_adjudication,
-                       levels = c("No Evidence", "Definite")),
-    predictor = integrated_preds$pred,
-    direction = "<"
+# Compute integrated AUC
+
+roc_integrated <- pROC::roc(
+  response = factor(
+    integrated_preds$LRTI_adjudication,
+    levels = c("No Evidence", "Definite")
   ),
+  predictor = integrated_preds$pred,
+  direction = "<"
+)
+
+auc_integrated <- as.numeric(
+  pROC::auc(roc_integrated)
+)
+
+ci_integrated <- pROC::ci.auc(
+  roc_integrated,
   conf.level = 0.95
 )
 
-message("Integrated AUC: ", round(as.numeric(ci_integrated[2]), 3),
-        " (95% CI: ", round(ci_integrated[1], 3),
-        "–", round(ci_integrated[3], 3), ")")
+message(
+  "Integrated AUC: ",
+  round(auc_integrated, 3),
+  " (95% CI: ",
+  round(ci_integrated[1], 3),
+  "–",
+  round(ci_integrated[3], 3),
+  ")"
+)
 
-# Compute protein AUC using same fold-wise method as gene
-auc_prot <- output_auc_roc(lassoRF_preds_prot, "lassoRF_prot")
+
+# Compute Gene AUC
+
+roc_gene <- pROC::roc(
+  response = factor(
+    combined_preds$LRTI_adjudication,
+    levels = c("No Evidence", "Definite")
+  ),
+  predictor = combined_preds$pred_gene,
+  direction = "<"
+)
+
+auc_gene <- as.numeric(
+  pROC::auc(roc_gene)
+)
+
+ci_gene <- pROC::ci.auc(
+  roc_gene,
+  conf.level = 0.95
+)
+
+message(
+  "Gene AUC: ",
+  round(auc_gene, 3),
+  " (95% CI: ",
+  round(ci_gene[1], 3),
+  "–",
+  round(ci_gene[3], 3),
+  ")"
+)
+
+
+# Compute Protein AUC
+
+roc_prot <- pROC::roc(
+  response = factor(
+    combined_preds$LRTI_adjudication,
+    levels = c("No Evidence", "Definite")
+  ),
+  predictor = combined_preds$pred_prot,
+  direction = "<"
+)
+
+auc_prot <- as.numeric(
+  pROC::auc(roc_prot)
+)
 
 ci_prot <- pROC::ci.auc(
-  pROC::roc(
-    response  = factor(lassoRF_preds_prot$LRTI_adjudication,
-                       levels = c("No Evidence", "Definite")),
-    predictor = lassoRF_preds_prot$pred,
-    direction = "<"
-  ),
+  roc_prot,
   conf.level = 0.95
 )
 
-message("Protein AUC: ", round(as.numeric(ci_prot[2]), 3),
-        " (95% CI: ", round(ci_prot[1], 3),
-        "–", round(ci_prot[3], 3), ")")
+message(
+  "Protein AUC: ",
+  round(auc_prot, 3),
+  " (95% CI: ",
+  round(ci_prot[1], 3),
+  "–",
+  round(ci_prot[3], 3),
+  ")"
+)
 
-# Compare all three models side by side
+
+# Compare all three models
+
 auc_comparison <- data.frame(
-  model     = c("Gene", "Protein", "Integrated"),
-  auc       = c(mean_auc,        as.numeric(ci_prot[2]),  as.numeric(ci_integrated[2])),
-  auc_lower = c(lower_auc,       ci_prot[1],              ci_integrated[1]),
-  auc_upper = c(upper_auc,       ci_prot[3],              ci_integrated[3])
+  model = c(
+    "Gene",
+    "Protein",
+    "Integrated"
+  ),
+  auc = c(
+    auc_gene,
+    auc_prot,
+    auc_integrated
+  ),
+  auc_lower = c(
+    ci_gene[1],
+    ci_prot[1],
+    ci_integrated[1]
+  ),
+  auc_upper = c(
+    ci_gene[3],
+    ci_prot[3],
+    ci_integrated[3]
+  )
 )
 
 print(auc_comparison)
@@ -392,55 +1709,139 @@ print(auc_comparison)
 
 
 
-# 5.7. DeLong Pairwise AUC Comparisons
+# 5.10. DeLong Pairwise AUC Comparisons
 
 
-# Build ROC objects on same 105 patients — must be aligned by sample_name
+# Align all three prediction sets by sample_name
+
+delong_data <- combined_preds %>%
+  dplyr::select(
+    sample_name,
+    LRTI_adjudication,
+    pred_gene,
+    pred_prot
+  ) %>%
+  inner_join(
+    integrated_preds %>%
+      dplyr::select(
+        sample_name,
+        pred_integrated = pred
+      ),
+    by = "sample_name"
+  )
+
+
+# Response variable
+
 response <- factor(
-  combined_preds$LRTI_adjudication,
+  delong_data$LRTI_adjudication,
   levels = c("No Evidence", "Definite")
 )
 
+
+# ROC objects
+
 roc_gene <- pROC::roc(
-  response  = response,
-  predictor = combined_preds$pred_gene,
+  response = response,
+  predictor = delong_data$pred_gene,
   direction = "<"
 )
 
 roc_prot <- pROC::roc(
-  response  = response,
-  predictor = combined_preds$pred_prot,
+  response = response,
+  predictor = delong_data$pred_prot,
   direction = "<"
 )
 
 roc_integrated <- pROC::roc(
-  response  = response,
-  predictor = integrated_preds$pred[match(
-    combined_preds$sample_name,
-    integrated_preds$sample_name)],
+  response = response,
+  predictor = delong_data$pred_integrated,
   direction = "<"
 )
 
+
 # Pairwise DeLong tests
-delong_gene_vs_prot       <- pROC::roc.test(roc_gene, roc_prot,       method="delong")
-delong_gene_vs_integrated <- pROC::roc.test(roc_gene, roc_integrated, method="delong")
-delong_prot_vs_integrated <- pROC::roc.test(roc_prot, roc_integrated, method="delong")
+
+delong_gene_vs_prot <- pROC::roc.test(
+  roc_gene,
+  roc_prot,
+  method = "delong"
+)
+
+delong_gene_vs_integrated <- pROC::roc.test(
+  roc_gene,
+  roc_integrated,
+  method = "delong"
+)
+
+delong_prot_vs_integrated <- pROC::roc.test(
+  roc_prot,
+  roc_integrated,
+  method = "delong"
+)
+
 
 # Summary table
+
 delong_results <- data.frame(
-  comparison  = c("Gene vs Protein", "Gene vs Integrated", "Protein vs Integrated"),
-  auc_1       = round(c(as.numeric(roc_gene$auc), as.numeric(roc_gene$auc), as.numeric(roc_prot$auc)), 3),
-  auc_2       = round(c(as.numeric(roc_prot$auc), as.numeric(roc_integrated$auc), as.numeric(roc_integrated$auc)), 3),
-  z_statistic = round(c(delong_gene_vs_prot$statistic, delong_gene_vs_integrated$statistic, delong_prot_vs_integrated$statistic), 3),
-  p_value     = signif(c(delong_gene_vs_prot$p.value, delong_gene_vs_integrated$p.value, delong_prot_vs_integrated$p.value), 2),
-  significant = c(delong_gene_vs_prot$p.value, delong_gene_vs_integrated$p.value, delong_prot_vs_integrated$p.value) < 0.05
+  comparison = c(
+    "Gene vs Protein",
+    "Gene vs Integrated",
+    "Protein vs Integrated"
+  ),
+  auc_1 = round(
+    c(
+      as.numeric(roc_gene$auc),
+      as.numeric(roc_gene$auc),
+      as.numeric(roc_prot$auc)
+    ),
+    3
+  ),
+  auc_2 = round(
+    c(
+      as.numeric(roc_prot$auc),
+      as.numeric(roc_integrated$auc),
+      as.numeric(roc_integrated$auc)
+    ),
+    3
+  ),
+  z_statistic = round(
+    c(
+      delong_gene_vs_prot$statistic,
+      delong_gene_vs_integrated$statistic,
+      delong_prot_vs_integrated$statistic
+    ),
+    3
+  ),
+  p_value = signif(
+    c(
+      delong_gene_vs_prot$p.value,
+      delong_gene_vs_integrated$p.value,
+      delong_prot_vs_integrated$p.value
+    ),
+    2
+  ),
+  significant = c(
+    delong_gene_vs_prot$p.value,
+    delong_gene_vs_integrated$p.value,
+    delong_prot_vs_integrated$p.value
+  ) < 0.05
 )
 
 print(delong_results)
 
-write.csv(delong_results,
-  file.path(results_dir, "delong_auc_comparisons.csv"),
-  row.names=F)
+
+# Save DeLong results
+
+write.csv(
+  delong_results,
+  file.path(
+    results_dir,
+    "delong_auc_comparisons.csv"
+  ),
+  row.names = FALSE
+)
+
 
 
 

@@ -1,0 +1,57 @@
+---
+title: "14-patchwork"
+output: 
+  html_notebook:
+    toc: true
+---
+
+
+```{r, warning=F}
+
+library(ggplot2)
+library(patchwork)
+
+
+
+
+
+
+# 14.1. Figure 2
+
+
+results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+prot_results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+
+
+# Import Figure 2A
+p2A <- readRDS(
+  file.path(
+    results_dir,
+    "volcano_transcriptome.rds"
+  )
+)
+
+# Import Figure 2B
+p2B <- readRDS(
+  file.path(
+    prot_results_dir,
+    "volcano_proteome.rds"
+  )
+)
+
+# Import Figure 2C
+p2C <- readRDS(
+  file.path(
+    results_dir,
+    "GSEA_Hallmark_RNA_vs_Protein.rds"
+  )
+)
+
+
+figure_2 <- (
+  p2A / p2B
+) | p2C
+
+figure_2
+```
+
