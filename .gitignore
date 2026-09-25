@@ -3,3 +3,5 @@ raw_data/
 *.RData
 **/.Rproj.user
 .Rproj.user
+*.RData
+.RDataTmp
