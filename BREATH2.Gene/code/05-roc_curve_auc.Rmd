@@ -21,8 +21,9 @@ library(ggplot2)
 # 5.1. Import metadata & predictions
 
 
-data_dir    <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
+
 
 patient_info_with_folds <- read.csv(
   file.path(data_dir, "metadata_df_with_folds.csv"),
@@ -295,7 +296,7 @@ forest_plot_gene <- ggplot(
     ),
     plot.title = element_text(
       face = "bold",
-      size = 14
+      size = 16
     ),
     plot.subtitle = element_text(
       face = "plain",
@@ -333,7 +334,7 @@ write.csv(
 
 
 # Import protein forest data
-prot_results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+prot_results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results"
 
 forest_data_prot <- read.csv(
   file.path(prot_results_dir, "forest_data_protein_classifiers.csv"),
@@ -448,12 +449,12 @@ forest_plot_combined <- ggplot(
     ),
     axis.title = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       face = "plain"
     ),
     plot.title = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       face = "plain",
       hjust = 0.5
     ),
@@ -481,6 +482,14 @@ ggsave(
   bg = "white"
 )
 
+# Save plot object for patchwork
+saveRDS(
+  forest_plot_combined,
+  file.path(
+    results_dir,
+    "forest_plot_gene_protein_combined.rds"
+  )
+)
 
 # Save combined summary table
 write.csv(
@@ -715,12 +724,12 @@ roc_plot_gg_gene <- ggplot() +
     ),
     axis.title = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       face = "plain"
     ),
     plot.title = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       face = "plain",
       hjust = 0.5
     ),
@@ -754,6 +763,15 @@ ggsave(
   bg = "white"
 )
 
+# Save plot object for patchwork
+saveRDS(
+  roc_plot_gg_gene,
+  file.path(
+    results_dir,
+    "ROC_lambda_vs_n3_overlaid_gene_gg.rds"
+  )
+)
+
 
 # DeLong test
 delong_test_gene <- pROC::roc.test(
@@ -768,15 +786,13 @@ message(
 )
 
 
-
-
-
-
+```
+```{r}
 # 5.7. Gene vs protein ROC curves for individual biomarkers
 
 
 # Protein results directory
-prot_results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+prot_results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results"
 
 
 # Function to create gene vs protein ROC plot
@@ -790,13 +806,13 @@ make_biomarker_roc_plot <- function(
   # Read gene predictions
   gene_preds <- read.csv(
     file.path(results_dir, gene_file),
-    stringsAsFactors = FALSE
+    stringsAsFactors=F
   )
 
   # Read protein predictions
   protein_preds <- read.csv(
     file.path(prot_results_dir, protein_file),
-    stringsAsFactors = FALSE
+    stringsAsFactors=F
   )
 
   # Ensure consistent factor levels
@@ -895,23 +911,35 @@ make_biomarker_roc_plot <- function(
 
 
   # Pooled AUC values and 95% CIs
-  auc_ci_gene <- pROC::ci.auc(roc_gene)
+  auc_ci_gene    <- pROC::ci.auc(roc_gene)
   auc_ci_protein <- pROC::ci.auc(roc_protein)
 
 
-  # Legend labels
+  # DeLong test (computed here so it can be used in legend)
+  delong_test <- pROC::roc.test(
+    roc_gene,
+    roc_protein,
+    method = "delong"
+  )
+
+
+  # Legend labels with DeLong p on its own line below Protein
   classifier_labels <- c(
     "Gene" = sprintf(
-      "Gene: AUC = %.2f (%.2f–%.2f)",
+      "Gene: AUC = %.2f (%.2f\u2013%.2f)",
       auc_ci_gene[2],
       auc_ci_gene[1],
       auc_ci_gene[3]
     ),
     "Protein" = sprintf(
-      "Protein: AUC = %.2f (%.2f–%.2f)",
+      "Protein: AUC = %.2f (%.2f\u2013%.2f)",
       auc_ci_protein[2],
       auc_ci_protein[1],
       auc_ci_protein[3]
+    ),
+    "DeLong" = paste0(
+      "DeLong p = ",
+      formatC(delong_test$p.value, format = "f", digits = 2)
     )
   )
 
@@ -954,6 +982,23 @@ make_biomarker_roc_plot <- function(
       linewidth = 1
     ) +
 
+    geom_point(
+      data = data.frame(
+        specificity = 0,
+        sensitivity = 0,
+        classifier = factor(
+          "DeLong",
+          levels = c("Gene", "Protein", "DeLong")
+        )
+      ),
+      aes(
+        x = specificity,
+        y = sensitivity,
+        color = classifier
+      ),
+      alpha = 0
+    ) +
+
     # Axes
     scale_x_reverse(
       breaks = seq(0, 1, 0.2),
@@ -968,11 +1013,13 @@ make_biomarker_roc_plot <- function(
     # Colors
     scale_color_manual(
       values = c(
-        "Gene" = "#0072B2",
-        "Protein" = "#009E73"
+        "Gene"    = "#0072B2",
+        "Protein" = "#009E73",
+        "DeLong"  = "transparent"
       ),
       labels = classifier_labels,
-      name = NULL
+      name = NULL,
+      drop = FALSE
     ) +
 
     scale_fill_manual(
@@ -1012,12 +1059,12 @@ make_biomarker_roc_plot <- function(
       ),
       axis.title = element_text(
         family = "Arial",
-        size = 12,
+        size = 16,
         face = "plain"
       ),
       plot.title = element_text(
         family = "Arial",
-        size = 12,
+        size = 16,
         face = "plain",
         hjust = 0.5
       ),
@@ -1050,14 +1097,6 @@ make_biomarker_roc_plot <- function(
   )
 
 
-  # DeLong test
-  delong_test <- pROC::roc.test(
-    roc_gene,
-    roc_protein,
-    method = "delong"
-  )
-
-
   # Print AUC summaries
   message(
     biomarker_name,
@@ -1065,7 +1104,7 @@ make_biomarker_roc_plot <- function(
     round(auc_ci_gene[2], 2),
     " (95% CI: ",
     round(auc_ci_gene[1], 2),
-    "–",
+    "\u2013",
     round(auc_ci_gene[3], 2),
     ")"
   )
@@ -1076,7 +1115,7 @@ make_biomarker_roc_plot <- function(
     round(auc_ci_protein[2], 2),
     " (95% CI: ",
     round(auc_ci_protein[1], 2),
-    "–",
+    "\u2013",
     round(auc_ci_protein[3], 2),
     ")"
   )
@@ -1091,53 +1130,62 @@ make_biomarker_roc_plot <- function(
   # Return results
   invisible(
     list(
-      roc_gene = roc_gene,
+      roc_plot    = roc_plot,
+      roc_gene    = roc_gene,
       roc_protein = roc_protein,
-      auc_gene = auc_ci_gene,
+      auc_gene    = auc_ci_gene,
       auc_protein = auc_ci_protein,
-      delong = delong_test
+      delong      = delong_test
     )
   )
 }
-
-
-
-
 
 
 # 5.7a. FABP4: gene vs protein
 
 results_FABP4 <- make_biomarker_roc_plot(
   biomarker_name = "FABP4",
-  gene_file = "lassoRF_preds_FABP4.csv",
-  protein_file = "lassoRF_preds_FABP4.csv",
-  output_file = "ROC_FABP4_gene_vs_prot_gg.pdf"
+  gene_file      = "lassoRF_preds_FABP4.csv",
+  protein_file   = "lassoRF_preds_FABP4.csv",
+  output_file    = "ROC_FABP4_gene_vs_prot_gg.pdf"
 )
 
-
-
-
+# Save Figure 4D plot object for patchwork
+saveRDS(
+  results_FABP4$roc_plot,
+  file.path(
+    results_dir,
+    "figure4D_FABP4.rds"
+  )
+)
 
 
 # 5.7b. ISG15: gene vs protein
 
 results_ISG15 <- make_biomarker_roc_plot(
   biomarker_name = "ISG15",
-  gene_file = "lassoRF_preds_ISG15.csv",
-  protein_file = "lassoRF_preds_ISG15.csv",
-  output_file = "ROC_ISG15_gene_vs_prot_gg.pdf"
+  gene_file      = "lassoRF_preds_ISG15.csv",
+  protein_file   = "lassoRF_preds_ISG15.csv",
+  output_file    = "ROC_ISG15_gene_vs_prot_gg.pdf"
+)
+
+# Save Figure 4E plot object for patchwork
+saveRDS(
+  results_ISG15$roc_plot,
+  file.path(
+    results_dir,
+    "figure4E_ISG15.rds"
+  )
 )
 
 
-
-
-
-
+```
+```{r}
 # 5.8. Gene / Protein adjudication plots
 
 
 # Protein results directory
-prot_results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+prot_results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results"
 
 
 # Helper function to make gene vs protein prediction-shift plot
@@ -1225,8 +1273,8 @@ make_switch_plot <- function(
 
   # Facet labels
   facet_labels <- c(
-  "Definite" = "LRTI",
-  "No Evidence" = "Control"
+    "Definite" = "LRTI",
+    "No Evidence" = "Control"
   )
 
 
@@ -1354,7 +1402,7 @@ make_switch_plot <- function(
       ),
       axis.title = element_text(
         family = "Arial",
-        size = 12,
+        size = 16,
         face = "plain"
       ),
       strip.text = element_text(
@@ -1364,7 +1412,7 @@ make_switch_plot <- function(
       ),
       plot.title = element_text(
         family = "Arial",
-        size = 12,
+        size = 16,
         face = "plain",
         hjust = 0.5
       ),
@@ -1405,6 +1453,15 @@ switch_full_lasso <- make_switch_plot(
   classifier_name = "Full LASSO",
   gene_filename = "lassoRF_preds.csv",
   output_filename = "gene_vs_protein_pred_shift.pdf"
+)
+
+# Save Figure 4F plot object for patchwork
+saveRDS(
+  switch_full_lasso$plot,
+  file.path(
+    results_dir,
+    "figure4F_full_lasso.rds"
+  )
 )
 
 
@@ -1460,7 +1517,7 @@ gene_preds_full <- read.csv(
 # Import Full LASSO protein predictions
 prot_preds_full <- read.csv(
   file.path(
-    "C:/Users/User/Documents/UCSF/BREATH2.Prot/results",
+    "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results",
     "lassoRF_preds.csv"
   ),
   stringsAsFactors = FALSE

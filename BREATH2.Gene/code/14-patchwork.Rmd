@@ -12,15 +12,11 @@ library(ggplot2)
 library(patchwork)
 
 
-
-
-
-
 # 14.1. Figure 2
 
 
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
-prot_results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
+prot_results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results"
 
 
 # Import Figure 2A
@@ -48,10 +44,267 @@ p2C <- readRDS(
 )
 
 
+
+# Figure 2 assembly
+
+p2A <- p2A +
+  theme(
+    aspect.ratio=1
+  )
+
+p2B <- p2B +
+  theme(
+    aspect.ratio=1,
+    plot.caption=element_text(
+      margin=margin(t=-15)
+    ),
+    plot.margin=margin(
+      t=80,
+      r=15,
+      b=10,
+      l=10
+    )
+  )
+
 figure_2 <- (
-  p2A / p2B
+  p2A /
+  p2B
 ) | p2C
 
-figure_2
+
+figure_2 <- figure_2 +
+  plot_layout(
+    widths=c(8, 8),
+    heights=c(6.2, 6.8)
+  ) &
+  theme(
+    plot.margin=margin(
+      t=10,
+      r=20,
+      b=10,
+      l=20
+    )
+  )
+
+
+figure_2 <- figure_2 +
+  plot_annotation(
+    tag_levels="A",
+    theme=theme(
+      plot.tag=element_text(
+        size=12,
+        family="Arial",
+        face="plain"
+      )
+    )
+  )
+
+
+
+
+
+ggsave(
+  file.path(
+    results_dir,
+    "Figure_2.pdf"
+  ),
+  figure_2,
+  width=16,
+  height=13,
+  device=cairo_pdf,
+  bg="white"
+)
+
+
+```
+
+
+
+```{r}
+
+
+# Import Figure 3 plot objects
+
+p3A <- readRDS(
+  file.path(
+    results_dir,
+    "figure3A_correlation_density.rds"
+  )
+)
+
+p3B <- readRDS(
+  file.path(
+    results_dir,
+    "figure3B_RNA_protein_concordance.rds"
+  )
+)
+
+p3C <- readRDS(
+  file.path(
+    results_dir,
+    "figure3C_FABP4_adjudication.rds"
+  )
+)
+
+p3D <- readRDS(
+  file.path(
+    results_dir,
+    "figure3D_ISG15_adjudication.rds"
+  )
+)
+
+p3E <- readRDS(
+  file.path(
+    results_dir,
+    "figure3E_GLRX_adjudication.rds"
+  )
+)
+
+p3F <- readRDS(
+  file.path(
+    results_dir,
+    "figure3F_IFNa_vs_viral_RPM.rds"
+  )
+)
+
+
+# Combine Figure 3 panels
+
+figure_3 <- (
+  p3A | p3B
+) /
+(
+  p3C | p3D
+) /
+(
+  p3E | p3F
+)
+
+figure_3 <- figure_3 +
+  plot_layout(
+    widths=c(1, 1),
+    heights=c(1, 1, 1)
+  ) &
+  theme(
+    plot.margin=margin(
+      t=10,
+      r=20,
+      b=10,
+      l=20
+    )
+  )
+
+figure_3 <- figure_3 +
+  plot_annotation(
+    tag_levels="A"
+  )
+
+
+ggsave(
+  file.path(
+    results_dir,
+    "Figure_3.pdf"
+  ),
+  figure_3,
+  width=12,
+  height=20,
+  device=cairo_pdf,
+  bg="white"
+)
+
+
+
+
+```
+```{r}
+
+
+p4A <- readRDS(
+  file.path(
+    results_dir,
+    "forest_plot_gene_protein_combined.rds"
+  )
+)
+
+p4B <- readRDS(
+  file.path(
+    results_dir,
+    "ROC_lambda_vs_n3_overlaid_gene_gg.rds"
+  )
+)
+
+p4C <- readRDS(
+  file.path(
+    prot_results_dir,
+    "figure4C_protein.rds"
+  )
+)
+
+p4D <- readRDS(
+  file.path(
+    results_dir,
+    "figure4D_FABP4.rds"
+  )
+)
+
+p4E <- readRDS(
+  file.path(
+    results_dir,
+    "figure4E_ISG15.rds"
+  )
+)
+
+p4F <- readRDS(
+  file.path(
+    results_dir,
+    "figure4F_full_lasso.rds"
+  )
+)
+
+# Make Figure 4
+figure_4 <- (
+  p4A | p4B | p4C
+) /
+(
+  p4D | p4E | p4F
+)
+
+figure_4 <- figure_4 +
+  plot_layout(
+    widths = c(1, 1, 1),
+    heights = c(1, 1)
+  ) &
+  theme(
+    plot.margin = margin(
+      t = 10,
+      r = 20,
+      b = 10,
+      l = 20
+    )
+  )
+
+figure_4 <- figure_4 +
+  plot_annotation(
+    tag_levels = "A"
+  )
+
+# Display Figure 4
+figure_4
+
+# Export Figure 4
+ggsave(
+  file.path(
+    results_dir,
+    "Figure_4.pdf"
+  ),
+  figure_4,
+  width = 20,
+  height = 12,
+  device = cairo_pdf,
+  bg = "white"
+)
+
+
+
 ```
 

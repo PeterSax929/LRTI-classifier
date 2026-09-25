@@ -16,7 +16,7 @@ output:
 
 
 # Set file paths
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data"
 
 # Include only Definite and No Evidence patients
 patient_info <- patient_info_ALL[patient_info_ALL$LRTI_adjudication %in% 

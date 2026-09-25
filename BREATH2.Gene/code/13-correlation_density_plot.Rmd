@@ -7,22 +7,28 @@ output:
 
 ```{r, warning=F, message=F}
 
+
 library(dplyr)
 library(tidyr)
 library(tibble)
 library(ggplot2)
 
 
+
+
+
+
 # 13.1 Import Data
 
 
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/raw_data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
+
 
 # Gene matrix
 full_vsd <- read.csv(
-  file.path(data_dir, "vst_full.csv"),
+  file.path(data_dir, "vst_oof.csv"),
   stringsAsFactors = F,
   check.names = F,
   row.names = 1
@@ -49,7 +55,7 @@ full_vsd <- full_vsd %>%
 # Protein matrix
 protein_mat <- read.csv(
   file.path(
-    "C:/Users/User/Documents/UCSF/BREATH2.Prot/data",
+    "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data",
     "protein_mat.csv"
   ),
   stringsAsFactors = F,
@@ -68,7 +74,7 @@ lasso_coefs_gene <- read.csv(
 # LASSO fold coefficients: protein workflow
 lasso_coefs_prot <- read.csv(
   file.path(
-    "C:/Users/User/Documents/UCSF/BREATH2.Prot/results",
+    "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results",
     "lasso_fold_coefs.csv"
   ),
   stringsAsFactors = F
@@ -84,6 +90,10 @@ metadata_df <- read.csv(
 )
 
 
+
+
+
+
 # 13.2 Plot settings
 
 
@@ -91,7 +101,7 @@ plot_width <- 6.5
 plot_height <- 6.5
 
 plot_font <- "Arial"
-plot_font_size <- 12
+plot_font_size <- 16
 
 genes_biomarker <- c(
   "FABP4",
@@ -113,6 +123,10 @@ cat(
   length(shared_genes),
   "\n"
 )
+
+
+
+
 
 
 # 13.3 Compute per-analyte Pearson r
@@ -187,6 +201,10 @@ cor_per_gene %>%
   arrange(desc(pearson_r))
 
 
+
+
+
+
 # 13.4 Identify LASSO-selected analytes
 
 
@@ -205,6 +223,10 @@ cor_per_gene <- cor_per_gene %>%
       TRUE ~ "Background"
     )
   )
+
+
+
+
 
 
 # 13.5 Main density plot of per-analyte Pearson r
@@ -247,16 +269,19 @@ p_density <- ggplot(
     ),
     hjust = 0,
     vjust = 1.5,
-    size = 3.5,
+    size = 14 / 2.845,
     family = plot_font
   ) +
   scale_x_continuous(
     limits = c(-0.5, 0.9),
     breaks = seq(-0.4, 0.8, 0.2)
   ) +
+  scale_y_continuous(
+  labels = function(x) sprintf("%.1f", x)
+  ) +
   labs(
-    title = "RNA-protein concordance across shared analytes",
-    x = "Pearson r (RNA vs protein)",
+    title = "RNA-protein concordance",
+    x = "Pearson correlation coefficient",
     y = "Density"
   ) +
   theme_classic(
@@ -269,7 +294,8 @@ p_density <- ggplot(
       size = plot_font_size
     ),
     axis.text = element_text(
-      color = "black"
+      color = "black",
+      size = plot_font_size
     ),
     axis.title = element_text(
       face = "plain"
@@ -295,6 +321,18 @@ ggsave(
   device = cairo_pdf
 )
 
+# Save Figure 3A plot object for patchwork
+saveRDS(
+  p_density,
+  file.path(
+    results_dir,
+    "figure3A_correlation_density.rds"
+  )
+)
+
+
+
+
 
 # 13.6 Print LASSO overlap information
 
@@ -314,6 +352,10 @@ cat(
   ),
   "\n"
 )
+
+
+
+
 
 
 # 13.7 Compute per-analyte Pearson r by LRTI group
@@ -390,6 +432,10 @@ cor_per_gene_adj <- full_vsd %>%
       )
     )
   )
+
+
+
+
 
 
 # 13.8 Function for LRTI/Control density plots
@@ -478,7 +524,11 @@ plot_density_group <- function(
 }
 
 
-# 13.9 LRTI density plot
+
+
+
+
+# 13.9 LRTI/Control density plot
 
 
 p_lrti <- plot_density_group(
@@ -488,10 +538,6 @@ p_lrti <- plot_density_group(
   fill_color = "red"
 )
 
-
-# 13.10 Control density plot
-
-
 p_control <- plot_density_group(
   data_df = cor_per_gene_adj %>%
     filter(LRTI_group == "Control"),
@@ -499,16 +545,8 @@ p_control <- plot_density_group(
   fill_color = "#0072B2"
 )
 
-
-# 13.11 Display group-specific plots
-
-
 print(p_lrti)
 print(p_control)
-
-
-# 13.12 Export group-specific plots
-
 
 ggsave(
   file.path(
@@ -537,7 +575,7 @@ ggsave(
 
 
 
-# 13.8 Import RNA/protein differential expression results
+# 13.10 Import RNA/protein differential expression results
 
 
 rna_res <- read.csv(
@@ -550,18 +588,11 @@ rna_res <- read.csv(
 
 prot_res <- read.csv(
   file.path(
-    "C:/Users/User/Documents/UCSF/BREATH2.Prot/results",
+    "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results",
     "DA_results_proteomics.csv"
   ),
   stringsAsFactors = F
 )
-
-
-
-
-
-
-# 13.9 Prepare RNA/protein differential expression results
 
 
 rna_df <- rna_res %>%
@@ -599,7 +630,8 @@ prot_df <- prot_res %>%
 
 
 
-# 13.10 Create master shared-analyte dataframe
+# 13.11. Create master shared-analyte dataframe
+
 
 cor_all_df <- cor_per_gene %>%
   dplyr::select(

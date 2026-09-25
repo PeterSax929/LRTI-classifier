@@ -21,19 +21,19 @@ library(ggrepel)
 # 8.1. Import data
 
 
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
 
 # RNA VST matrix (genes x samples)
 full_vsd <- read.csv(
-  file.path(data_dir, "vst_full.csv"),
+  file.path(data_dir, "vst_oof.csv"),
   check.names = F,
   row.names = 1
 )
 
 # Protein log2-normalized abundance matrix (samples x proteins)
 protein_mat <- read.csv(
-  "C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv",
+  "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv",
   check.names = F,
   row.names = 1
 )
@@ -218,7 +218,7 @@ loglog_plot <- ggplot(
       color = "black",
       hjust = 0.5
     ),
-    plot.margin = margin(10, 15, 10, 10)
+    plot.margin = ggplot2::margin(10, 15, 10, 10)
   ) +
 
   labs(

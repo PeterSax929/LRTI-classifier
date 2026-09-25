@@ -21,8 +21,8 @@ library(tibble)
 # 6.1. Import Data for RF
 
 
-data_dir    <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results"
 
 patient_info_with_folds <- read.csv(
   file.path(data_dir, "patient_info_with_folds.csv"),

@@ -20,8 +20,8 @@ library(magrittr)
 
 
 # Set directories
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/raw_data"
 
 # Import metadata
 metadata_df_ALL <- read.csv(

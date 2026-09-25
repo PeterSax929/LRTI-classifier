@@ -23,8 +23,8 @@ library(ggplot2)
 
 
 # Set file paths
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results"
 
 # Import data
 patient_info_with_folds <- read.csv(

@@ -20,7 +20,7 @@ library(magrittr)
 # 2.1. Import metadata
 
 
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
 
 # Number of folds
 nfolds <- as.numeric(Parameters["Folds", "Count"])

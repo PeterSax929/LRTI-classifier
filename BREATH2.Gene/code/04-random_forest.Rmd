@@ -21,20 +21,16 @@ library(tibble)
 # 4.1. Import Data for RF
 
 
-raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/raw_data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
 
 # Import metadata
 metadata_df_with_folds <- read.csv(
   file.path(data_dir, "metadata_df_with_folds.csv"),
   stringsAsFactors=F)
 
-# Import VST data
-full_vsd <- read.csv(
-  file.path(data_dir, "vst_full.csv"),
-  stringsAsFactors=F,
-  row.names=1)
+
 
 # Number of RF trees
 ntrees <- as.numeric(Parameters["RF Trees", "Count"])
@@ -61,19 +57,7 @@ y <- factor(
 # Number of outer folds
 nfolds <- max(metadata_df_with_folds$fold)
 
-# Convert VST matrix to samples x genes
-X_all <- t(as.matrix(full_vsd))
 
-# Ensure sample order matches metadata
-X_all <- X_all[
-  metadata_df_with_folds$sample_name,
-  ,
-  drop=F
-]
-
-stopifnot(
-  all(rownames(X_all) == metadata_df_with_folds$sample_name)
-)
 
 
 
@@ -96,16 +80,55 @@ run_rf_classifier <- function(selected_coefs, classifier_name) {
       pull(gene) %>%
       unique()
     
-    # Check that selected genes are present
-    stopifnot(all(keep %in% colnames(X_all)))
-    
     # Define training and test samples
     train <- metadata_df_with_folds$fold != test_fold
     test  <- metadata_df_with_folds$fold == test_fold
-    
-    # Training and test matrices
-    X_train <- X_all[train, keep, drop=F]
-    X_test  <- X_all[test, keep, drop=F]
+
+
+    # Load VST matrices generated using this outer fold
+    vsd_train_mat <- readRDS(
+      file.path(
+        data_dir,
+        paste0("vsd_train_fold", test_fold, ".rds")
+      )
+    )
+
+    vsd_test_mat <- readRDS(
+      file.path(
+        data_dir,
+        paste0("vsd_test_fold", test_fold, ".rds")
+      )
+    )
+
+
+    # Check that selected genes are present
+    stopifnot(
+      all(keep %in% rownames(vsd_train_mat)),
+      all(keep %in% rownames(vsd_test_mat))
+    )
+
+
+    # Confirm VST samples match the expected outer fold
+    stopifnot(
+      all(
+        colnames(vsd_train_mat) ==
+        metadata_df_with_folds$sample_name[train]
+      ),
+      all(
+        colnames(vsd_test_mat) ==
+          metadata_df_with_folds$sample_name[test]
+      )
+    )
+
+
+    # Convert VST matrices to samples x genes
+    X_train_all <- t(as.matrix(vsd_train_mat))
+    X_test_all  <- t(as.matrix(vsd_test_mat))
+
+
+    # Keep only selected features
+    X_train <- X_train_all[, keep, drop=F]
+    X_test  <- X_test_all[, keep, drop=F]
     
     # Fit RF on training samples only
     rf <- randomForest(
@@ -343,10 +366,6 @@ stopifnot(
   )) == nrow(metadata_df_with_folds)
 )
 
-# Confirm VST sample order
-stopifnot(
-  all(colnames(full_vsd) == metadata_df_with_folds$sample_name)
-)
 
 # Confirm biomarker features are present
 stopifnot(fabp4_ensg %in% colnames(X_all))

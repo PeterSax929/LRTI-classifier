@@ -23,9 +23,9 @@ library(ggplot2)
 # 3.1. Import host counts & metadata
 
 
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/raw_data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
 
 # Metadata with folds
 metadata_df_with_folds <- read.csv(
@@ -282,12 +282,13 @@ lasso_cv_outer_fold <- function(test_fold) {
 
 
   # Return fold-specific results
-  list(
-    lambda = lambda_df,
-    n3 = n3_df,
-    n1 = n1_df,
-    vsd_cols = vsd_test_mat
-  )
+  return(list(
+    lambda=lambda_df,
+    n3=n3_df,
+    n1=n1_df,
+    vsd_train=vsd_train_mat,
+    vsd_test=vsd_test_mat
+    ))
 }
 
 
@@ -302,12 +303,49 @@ lasso_results <- lapply(
   1:max(metadata_df_with_folds$fold),
   lasso_cv_outer_fold)
 
+# Save fold-specific VST matrices
+for (i in seq_along(lasso_results)) {
 
-# Collect frozen VST matrices
+  saveRDS(
+    lasso_results[[i]]$vsd_train,
+    file.path(
+      data_dir,
+      paste0("vsd_train_fold", i, ".rds")
+    )
+  )
+
+  saveRDS(
+    lasso_results[[i]]$vsd_test,
+    file.path(
+      data_dir,
+      paste0("vsd_test_fold", i, ".rds")
+    )
+  )
+}
+
+
+
+# Collect fold-specific LASSO coefficients
+lasso_fold_coefs <- lasso_results %>%
+  lapply(function(x) x$lambda) %>%
+  bind_rows()
+
+lasso_fold_coefs_n3 <- lasso_results %>%
+  lapply(function(x) x$n3) %>%
+  bind_rows()
+
+lasso_fold_coefs_n1 <- lasso_results %>%
+  lapply(function(x) x$n1) %>%
+  bind_rows()
+
+
+# Save out-of-fold VST matrix for downstream analyses
+
+# Collect fold-specific test VST matrices
 vsd_list <- lapply(
   lasso_results,
   `[[`,
-  "vsd_cols")
+  "vsd_test")
 
 full_vsd <- do.call(
   cbind,
@@ -328,26 +366,11 @@ stopifnot(
 )
 
 
-# Save full VST matrix
+# Save VST matrix for downstream analyses
 write.csv(
   full_vsd,
-  file.path(data_dir, "vst_full.csv"),
+  file.path(data_dir, "vst_oof.csv"),
   row.names=T)
-
-
-# Collect fold-specific LASSO coefficients
-lasso_fold_coefs <- lasso_results %>%
-  lapply(function(x) x$lambda) %>%
-  bind_rows()
-
-lasso_fold_coefs_n3 <- lasso_results %>%
-  lapply(function(x) x$n3) %>%
-  bind_rows()
-
-lasso_fold_coefs_n1 <- lasso_results %>%
-  lapply(function(x) x$n1) %>%
-  bind_rows()
-
 
 # Save LASSO coefficients
 write.csv(

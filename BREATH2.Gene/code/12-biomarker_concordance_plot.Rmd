@@ -21,9 +21,10 @@ library(ggplot2)
 # 12.1 Import Data
 
 
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/raw_data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
+
 
 metadata_df <- read.csv(
   file.path(data_dir, "metadata_df_with_folds.csv"),
@@ -32,7 +33,7 @@ metadata_df <- read.csv(
 
 protein_mat <- read.csv(
   file.path(
-    "C:/Users/User/Documents/UCSF/BREATH2.Prot/data",
+    "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data",
     "protein_mat.csv"
   ),
   stringsAsFactors=F,
@@ -40,7 +41,7 @@ protein_mat <- read.csv(
 )
 
 full_vsd <- read.csv(
-  file.path(data_dir, "vst_full.csv"),
+  file.path(data_dir, "vst_oof.csv"),
   stringsAsFactors=F,
   check.names=F
 )
@@ -411,9 +412,23 @@ for (selected_gene in genes_to_plot) {
     )
   )
 
+  interaction_label <- ifelse(
+  interaction_p < 0.001,
+  "Interaction p < 0.001",
+  paste0(
+    "Interaction p = ",
+    formatC(interaction_p, format = "f", digits = 2)
+    )
+  )
+
   label_text <- paste0(
-    "LRTI: r = ", r_definite, "\n",
-    "Control: r = ", r_noevidence
+  "LRTI: r = ", formatC(r_definite, format = "f", digits = 2), "\n",
+  "Control: r = ", formatC(r_noevidence, format = "f", digits = 2),
+  if (selected_gene == "GLRX") {
+    paste0("\n", interaction_label)
+  } else {
+    ""
+    }
   )
 
 
@@ -437,7 +452,8 @@ for (selected_gene in genes_to_plot) {
       se = TRUE,
       linewidth = 1.0,
       alpha = 0.20,
-      fullrange = TRUE
+      fullrange = TRUE,
+      xseq = seq(-3, 4, length.out = 100)
     ) +
     geom_hline(
       yintercept = 0,
@@ -451,13 +467,18 @@ for (selected_gene in genes_to_plot) {
     ) +
     scale_color_manual(
       values = c(
-        "LRTI" = "#D55E00",
-        "Control" = "#8B4789"
+      "LRTI" = "#D55E00",
+      "Control" = "#8B4789"
+      ),
+      breaks = c(
+      "LRTI",
+      "Control"
       ),
       labels = c(
-        "LRTI",
-        "Control"
-      )
+      "LRTI",
+      "Control"
+      ),
+      name = NULL
     ) +
     theme_classic(
       base_size = 12,
@@ -469,47 +490,52 @@ for (selected_gene in genes_to_plot) {
         "RNA/protein concordance"
       ),
       x = "RNA expression (z-score)",
-      y = "Protein expression (z-score)",
+      y = "Protein abundance (z-score)",
       color = NULL
     ) +
+    
     annotate(
       "text",
-      x = min(
-        gene_concordance$expr_scaled_rna,
-        na.rm=T
-      ) - 0.05,
+      x = -2.8,
       y = Inf,
       label = label_text,
       hjust = 0,
       vjust = 1.3,
-      size = 3.5,
+      size = 14 / 2.845,
       lineheight = 1.0,
       color = "black",
       family = "Arial"
     ) +
+    
     theme(
       text = element_text(
         family = "Arial",
         size = 12
       ),
       axis.text = element_text(
-        color = "black"
+        color = "black",
+        size = 16
       ),
       axis.title = element_text(
-        face = "plain"
+        face = "plain",
+        size = 16
       ),
       plot.title = element_text(
         hjust = 0.5,
         face = "plain",
-        size = 12
+        size = 16
       ),
-      legend.position = "bottom",
+      legend.position = c(0.5, 0.08),
       legend.direction = "horizontal",
       legend.text = element_text(
-        size = 12
+        family = "Arial",
+        size = 16,
+        face = "plain"
       ),
       legend.title = element_text(
-        size = 12
+        family = "Arial",
+        size = 16,
+        face = "plain"
       ),
       plot.margin = ggplot2::margin(
         t=10,
@@ -519,32 +545,23 @@ for (selected_gene in genes_to_plot) {
       )
     ) +
     coord_cartesian(
-      xlim = c(
-        min(
-          gene_concordance$expr_scaled_rna,
-          na.rm=T
-        ) - 0.2,
-        max(
-          gene_concordance$expr_scaled_rna,
-          na.rm=T
-        ) + 0.2
-      ),
-      ylim = c(
-        min(
-          gene_concordance$expr_scaled_protein,
-          na.rm=T
-        ) - 0.2,
-        max(
-          gene_concordance$expr_scaled_protein,
-          na.rm=T
-        ) + 0.8
-      ),
+      xlim = c(-3, 4),
+      ylim = c(-3, 4),
       clip = "off"
+    ) +
+  
+    scale_x_continuous(
+      breaks = seq(-3, 4, 1),
+      labels = function(x) sprintf("%.1f", x),
+    ) +
+    scale_y_continuous(
+      breaks = seq(-3, 4, 1),
+      labels = function(x) sprintf("%.1f", x),
     )
 
   print(p)
 
-  ggsave(
+    ggsave(
     file.path(
       results_dir,
       paste0(
@@ -557,6 +574,37 @@ for (selected_gene in genes_to_plot) {
     height = 6.5,
     device = cairo_pdf
   )
+
+  # Save Figure 3C, 3D, and 3E plot objects for patchwork
+  if (selected_gene == "FABP4") {
+    saveRDS(
+      p,
+      file.path(
+        results_dir,
+        "figure3C_FABP4_adjudication.rds"
+      )
+    )
+  }
+
+  if (selected_gene == "ISG15") {
+    saveRDS(
+      p,
+      file.path(
+        results_dir,
+        "figure3D_ISG15_adjudication.rds"
+      )
+    )
+  }
+
+  if (selected_gene == "GLRX") {
+    saveRDS(
+      p,
+      file.path(
+        results_dir,
+        "figure3E_GLRX_adjudication.rds"
+      )
+    )
+  }
 
 }
 

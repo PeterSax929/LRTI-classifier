@@ -16,7 +16,8 @@ output:
 
 
 # Set file paths
-raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
+
+raw_data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/raw_data"
 
 # Import data from Box
 vap_soma_normalized <- read.csv(

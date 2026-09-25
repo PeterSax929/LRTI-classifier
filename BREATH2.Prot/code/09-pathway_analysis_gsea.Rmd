@@ -19,7 +19,7 @@ library(stringr)
 # 9.1. Import data
 
 
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results"
 
 res_df <- read.csv(
   file.path(results_dir, "DA_results_proteomics.csv"),

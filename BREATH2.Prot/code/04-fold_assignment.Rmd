@@ -21,7 +21,7 @@ library(magrittr)
 
 
 # Set file paths
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data"
 
 # Define number of folds
 nfolds <- as.numeric(Parameters["Folds", "Count"])

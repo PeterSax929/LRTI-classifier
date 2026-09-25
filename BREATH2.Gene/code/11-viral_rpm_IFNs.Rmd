@@ -22,13 +22,14 @@ library(msigdbr)
 # 11.1. Import data
 
 
-data_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
-raw_data_dir <- "C:/Users/User/Documents/UCSF/raw_data"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/data"
+raw_data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/raw_data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
+
 
 # Import full VST matrix
 full_vsd <- read.csv(
-  file.path(data_dir, "vst_full.csv"),
+  file.path(data_dir, "vst_oof.csv"),
   stringsAsFactors=F,
   check.names=F,
   row.names=1
@@ -76,7 +77,7 @@ metadata_with_mNGS <- read.csv(
 # Import protein matrix
 protein_mat <- read.csv(
   file.path(
-    "C:/Users/User/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv"
+    "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data/protein_mat.csv"
   ),
   stringsAsFactors=F
 )
@@ -721,6 +722,65 @@ build_ifn_score_shared <- function(rpm_df) {
 }
 
 
+
+
+
+
+#-----------------------
+
+
+
+
+
+build_pathogen_rpm <- function(metadata_df, pathogen_prefix, report_df, report_category, synonyms=list()) {
+
+  sample_pathogen_map <- metadata_df %>%
+    filter(LRTI_adjudication == "Definite") %>%
+    dplyr::select(sanitized_name, starts_with(pathogen_prefix)) %>%
+    pivot_longer(cols=starts_with(pathogen_prefix), values_to="pathogen", values_drop_na=TRUE) %>%
+    filter(pathogen != "") %>%
+    dplyr::select(sanitized_name, pathogen) %>%
+    distinct()
+
+  match_pathogen_to_name <- function(pathogen, name) {
+    p <- tolower(pathogen); n <- tolower(name)
+    direct <- grepl(p, n, fixed=TRUE) | grepl(n, p, fixed=TRUE)
+    syn <- if (p %in% names(synonyms)) grepl(synonyms[[p]], n, fixed=TRUE) else FALSE
+    direct | syn
+  }
+
+  candidate_rows <- report_df %>%
+    filter(category %in% report_category, sample_name %in% sample_pathogen_map$sanitized_name)
+
+  matched_rows <- sample_pathogen_map %>%
+    left_join(candidate_rows, by=c("sanitized_name"="sample_name"), relationship="many-to-many") %>%
+    filter(!is.na(name)) %>%
+    rowwise() %>%
+    mutate(is_match = match_pathogen_to_name(pathogen, name)) %>%
+    ungroup() %>%
+    filter(is_match)
+
+  unmatched <- sample_pathogen_map %>% anti_join(matched_rows, by=c("sanitized_name","pathogen"))
+  if (nrow(unmatched) > 0) {
+    print(unmatched)
+    warning(nrow(unmatched), " sample-pathogen pairs unmatched — check synonyms list")
+  }
+
+  matched_rows %>%
+    distinct(sanitized_name, name, nt_rpm) %>%
+    group_by(sanitized_name) %>%
+    summarize(rpm = sum(nt_rpm, na.rm=TRUE), .groups="drop") %>%
+    dplyr::rename(sample_name = sanitized_name)
+}
+
+
+
+
+#--------------
+
+
+
+
 # Helper function: compute correlations
 compute_cor <- function(
   score_df,
@@ -818,12 +878,8 @@ make_ifn_plot <- function(
     geom_text(
       data=cor_df,
       aes(
-        x=max(
-          log10(
-            score_df$viral_rpm + 1
-          )
-        ) * 0.98,
-        y=y_pos,
+        x=0.15,
+        y = 2.05 - (seq_along(modality) - 1) * 0.30,
         label=paste0(
           modality,
           ": r = ",
@@ -835,19 +891,15 @@ make_ifn_plot <- function(
         )
       ),
       inherit.aes=FALSE,
-      size=4,
-      hjust=1
+      size=14 / 2.845,
+      hjust=0
     ) +
 
     # Interaction p-value
     annotate(
       "text",
-      x=max(
-        log10(
-          score_df$viral_rpm + 1
-        )
-      ) * 0.98,
-      y=-1.7,
+      x = 0.15,
+      y = 1.60,
       label=ifelse(
         interaction_p < 0.001,
         "Interaction p < 0.001",
@@ -860,12 +912,23 @@ make_ifn_plot <- function(
           )
         )
       ),
-      size=4,
-      hjust=1
+      size=14 / 2.845,
+      hjust=0
     ) +
 
     coord_cartesian(
-      ylim=c(-2.0, 1.5)
+      xlim=c(0, 5),
+      ylim=c(-2, 2),
+      clip="off"
+    ) +
+    
+    scale_x_continuous(
+      breaks=seq(0, 5, 1),
+      labels=function(x) sprintf("%.1f", x)
+    ) +
+    scale_y_continuous(
+      breaks=seq(-2, 2, 1),
+      labels=function(x) sprintf("%.1f", x)
     ) +
 
     scale_color_manual(
@@ -885,31 +948,31 @@ make_ifn_plot <- function(
       ),
       axis.text=element_text(
         family="Arial",
-        size=12,
+        size=16,
         color="black",
         face="plain"
       ),
       axis.title=element_text(
         family="Arial",
-        size=12,
+        size=16,
         color="black",
         face="plain"
       ),
-      legend.position="bottom",
+      legend.position= c(0.5, 0.08),
       legend.direction="horizontal",
       legend.text=element_text(
         family="Arial",
-        size=12,
+        size=16,
         face="plain"
       ),
       legend.title=element_blank(),
       plot.title=element_text(
         family="Arial",
-        size=12,
+        size=16,
         hjust=0.5,
         face="plain"
       ),
-      plot.margin=margin(
+      plot.margin=ggplot2::margin(
         10,
         10,
         10,
@@ -919,7 +982,7 @@ make_ifn_plot <- function(
 
     labs(
       x=x_label,
-      y="IFN alpha score (z-score)",
+      y="IFN alpha pathway score (z-score)",
       title=title
     )
 
@@ -935,8 +998,10 @@ make_ifn_plot <- function(
     height=6.5,
     device=cairo_pdf,
     bg="white"
-  )
-}
+    )
+
+   return(p)
+  }
 
 
 # Define RSV and rhinovirus sample sets upfront
@@ -998,46 +1063,22 @@ samples_with_rhino <- metadata_with_mNGS %>%
 # 11.3a. Viral load vs IFN - ALL VIRAL mNGS HITS (n=62 Definite)
 
 
-samples_with_viral_hits <- metadata_with_mNGS %>%
-  filter(
-    LRTI_adjudication=="Definite"
-  ) %>%
-  dplyr::select(
-    sanitized_name,
-    starts_with("JCI_virus_")
-  ) %>%
-  pivot_longer(
-    cols=starts_with("JCI_virus_"),
-    values_to="pathogen",
-    values_drop_na=TRUE
-  ) %>%
-  filter(
-    pathogen != ""
-  ) %>%
-  dplyr::select(
-    sanitized_name
-  ) %>%
-  distinct()
+virus_synonyms <- list("respiratory syncytial virus" = "orthopneumovirus")
 
-viral_all_hits <- microbe_reports_bgfilter %>%
-  filter(
-    category=="viruses",
-    sample_name %in%
-      samples_with_viral_hits$sanitized_name
-  ) %>%
-  group_by(sample_name) %>%
-  summarize(
-    viral_rpm=sum(
-      nt_rpm,
-      na.rm=TRUE
-    ),
-    .groups="drop"
-  )
+viral_all_hits <- build_pathogen_rpm(
+  metadata_df = metadata_with_mNGS,
+  pathogen_prefix = "JCI_virus_",
+  report_df = microbe_reports_bgfilter,
+  report_category = "viruses",
+  synonyms = virus_synonyms
+) %>%
+  dplyr::rename(viral_rpm = rpm)
 
-message(
-  "11.3a - n samples with viral hits: ",
-  nrow(viral_all_hits)
-)
+message("11.3a - n samples with viral hits: ", nrow(viral_all_hits))
+
+
+
+
 
 ifn_score_viral_all <- build_ifn_score(
   viral_all_hits
@@ -1059,7 +1100,7 @@ interaction_p_viral_all <- summary(
   "Pr(>|t|)"
 ]
 
-make_ifn_plot(
+p3F <- make_ifn_plot(
   score_df=ifn_score_viral_all,
   cor_df=cor_viral_all,
   interaction_p=interaction_p_viral_all,
@@ -1067,9 +1108,18 @@ make_ifn_plot(
   x_label=expression(
     log[10]~"viral RPM (+1)"
   ),
-  title="Composite IFN alpha score versus viral abundance",
+  title="IFN alpha versus viral abundance",
   subtitle=NULL,
   filename="Viral_All_vs_IFNa_mNGS.pdf"
+)
+
+# Save Figure 3F plot object for patchwork
+saveRDS(
+  p3F,
+  file.path(
+    results_dir,
+    "figure3F_IFNa_vs_viral_RPM.rds"
+  )
 )
 
 
@@ -1374,6 +1424,289 @@ make_ifn_plot(
 )
 
 
+
+
+
+
+```
+```{r}
+
+
+# 11.4. Composite neutrophil degranulation score — bacterial setup
+
+
+neut_geneset <- msigdbr(
+  species="Homo sapiens",
+  collection="C2",
+  subcollection="CP:REACTOME"
+) %>%
+  filter(
+    gs_name %in% c("REACTOME_NEUTROPHIL_DEGRANULATION")
+  ) %>%
+  pull(gene_symbol) %>%
+  unique()
+
+hallmark_neut_genes <- intersect(neut_geneset, full_vsd$gene_symbol)
+
+cat("Neutrophil degranulation genes in RNA data:", length(hallmark_neut_genes), "\n")
+cat("Neutrophil degranulation genes in protein data:",
+    sum(hallmark_neut_genes %in% colnames(protein_mat)[-1]), "\n")
+
+hallmark_neut_genes_shared <- intersect(hallmark_neut_genes, colnames(protein_mat)[-1])
+
+cat("Shared neutrophil degranulation genes (RNA and protein):",
+    length(hallmark_neut_genes_shared), "\n")
+
+
+build_neut_score <- function(rpm_df) {
+  bind_rows(
+    full_vsd %>%
+      filter(gene_symbol %in% hallmark_neut_genes) %>%
+      pivot_longer(cols=-c(gene, gene_symbol), names_to="sample_name", values_to="expr") %>%
+      group_by(gene_symbol) %>%
+      mutate(expr_scaled=as.numeric(scale(expr))) %>%
+      ungroup() %>%
+      group_by(sample_name) %>%
+      summarize(Neut_score=mean(expr_scaled, na.rm=T), .groups="drop") %>%
+      mutate(modality="RNA"),
+
+    protein_mat %>%
+      { colnames(.)[1] <- "patient_id"; . } %>%
+      mutate(patient_id=as.integer(patient_id)) %>%
+      pivot_longer(cols=-patient_id, names_to="gene_symbol", values_to="expr_log2") %>%
+      filter(gene_symbol %in% intersect(hallmark_neut_genes, colnames(protein_mat)[-1])) %>%
+      left_join(metadata_df_with_folds %>% dplyr::select(patient_id, sample_name), by="patient_id") %>%
+      group_by(gene_symbol) %>%
+      mutate(expr_scaled=as.numeric(scale(expr_log2))) %>%
+      ungroup() %>%
+      group_by(sample_name) %>%
+      summarize(Neut_score=mean(expr_scaled, na.rm=T), .groups="drop") %>%
+      mutate(modality="Protein")
+  ) %>%
+    inner_join(rpm_df, by="sample_name")
+}
+
+
+
+# Generalized correlation
+
+
+compute_cor2 <- function(score_df, score_col, rpm_col="bacterial_rpm") {
+  score_df %>%
+    group_by(modality) %>%
+    summarize(
+      n_obs=n(),
+      pearson_r=if(n() >= 3) cor.test(.data[[score_col]], log10(.data[[rpm_col]]+1), method="pearson")$estimate else NA,
+      pearson_p=if(n() >= 3) cor.test(.data[[score_col]], log10(.data[[rpm_col]]+1), method="pearson")$p.value else NA,
+      .groups="drop"
+    ) %>%
+    mutate(
+      pearson_padj=p.adjust(pearson_p, method="BH"),
+      pearson_padj_fmt=signif(pearson_padj, 2)
+    )
+}
+
+make_neut_plot <- function(score_df, cor_df, interaction_p, n_cases, x_label, title, filename) {
+
+  p <- ggplot(score_df, aes(x=log10(bacterial_rpm + 1), y=Neut_score, color=modality)) +
+    geom_point(alpha=0.7, size=1.8) +
+    geom_smooth(method="lm", se=TRUE, alpha=0.15) +
+    geom_hline(yintercept=0, linetype="dashed", color="grey40") +
+    geom_text(
+      data=cor_df,
+      aes(x=0.15, y=2.05 - (seq_along(modality)-1)*0.30,
+          label=paste0(modality, ": r = ", formatC(pearson_r, format="f", digits=2))),
+      inherit.aes=FALSE, size=14/2.845, hjust=0
+    ) +
+    annotate("text", x=0.15, y=1.60,
+      label=ifelse(interaction_p < 0.001, "Interaction p < 0.001",
+                    paste0("Interaction p = ", formatC(interaction_p, format="e", digits=2))),
+      size=14/2.845, hjust=0
+    ) +
+    coord_cartesian(xlim=c(0, 5), ylim=c(-2, 2), clip="off") +
+    scale_x_continuous(breaks=seq(0, 5, 1), labels=function(x) sprintf("%.1f", x)) +
+    scale_y_continuous(breaks=seq(-2, 2, 1), labels=function(x) sprintf("%.1f", x)) +
+    scale_color_manual(values=omics_colors) +
+    theme_classic(base_size=12, base_family="Arial") +
+    theme(
+      text=element_text(family="Arial", size=12, face="plain"),
+      axis.text=element_text(family="Arial", size=16, color="black", face="plain"),
+      axis.title=element_text(family="Arial", size=16, color="black", face="plain"),
+      legend.position=c(0.5, 0.08),
+      legend.direction="horizontal",
+      legend.text=element_text(family="Arial", size=16, face="plain"),
+      legend.title=element_blank(),
+      plot.title=element_text(family="Arial", size=16, hjust=0.5, face="plain"),
+      plot.margin=ggplot2::margin(10, 10, 10, 10)
+    ) +
+    labs(x=x_label, y="Neutrophil degranulation score (z-score)", title=title)
+
+  print(p)
+  ggsave(file.path(results_dir, filename), p, width=6.5, height=6.5, device=cairo_pdf, bg="white")
+  return(p)
+}
+
+
+# Define H. influenzae and Moraxella sample sets
+
+
+samples_with_hflu <- metadata_with_mNGS %>%
+  filter(LRTI_adjudication=="Definite") %>%
+  dplyr::select(sanitized_name, starts_with("JCI_BF_")) %>%
+  pivot_longer(cols=starts_with("JCI_BF_"), values_to="pathogen", values_drop_na=TRUE) %>%
+  filter(grepl("haemophilus influenzae", pathogen, ignore.case=TRUE)) %>%
+  dplyr::select(sanitized_name) %>%
+  distinct()
+
+samples_with_moraxella <- metadata_with_mNGS %>%
+  filter(LRTI_adjudication=="Definite") %>%
+  dplyr::select(sanitized_name, starts_with("JCI_BF_")) %>%
+  pivot_longer(cols=starts_with("JCI_BF_"), values_to="pathogen", values_drop_na=TRUE) %>%
+  filter(grepl("moraxella catarrhalis", pathogen, ignore.case=TRUE)) %>%
+  dplyr::select(sanitized_name) %>%
+  distinct()
+
+
+
+
+
+
+# 11.4a. H. influenzae specific
+
+
+bacterial_hflu_hits <- microbe_reports_bgfilter %>%
+  filter(
+    category %in% c("bacteria", "fungi"),
+    sample_name %in% samples_with_hflu$sanitized_name,
+    grepl("haemophilus influenzae", name, ignore.case=TRUE)
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(bacterial_rpm=sum(nt_rpm, na.rm=TRUE), .groups="drop")
+
+message("11.4a - n H. influenzae samples: ", nrow(bacterial_hflu_hits))
+
+neut_score_hflu <- build_neut_score(bacterial_hflu_hits)
+cor_hflu <- compute_cor2(neut_score_hflu, score_col="Neut_score")
+
+interaction_p_hflu <- summary(
+  lm(Neut_score ~ log10(bacterial_rpm + 1) * as.character(modality), data=neut_score_hflu)
+)$coefficients["log10(bacterial_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"]
+
+make_neut_plot(
+  score_df=neut_score_hflu,
+  cor_df=cor_hflu,
+  interaction_p=interaction_p_hflu,
+  n_cases=nrow(bacterial_hflu_hits),
+  x_label=expression(log[10]~"H. influenzae RPM (+1)"),
+  title="H. influenzae load versus neutrophil degranulation",
+  filename="Hflu_vs_NeutDegran_mNGS.pdf"
+)
+
+
+# Sensitivity: exclude cases with both H. influenzae and Moraxella
+
+
+samples_hflu_only <- samples_with_hflu %>%
+  filter(!sanitized_name %in% samples_with_moraxella$sanitized_name)
+
+bacterial_hflu_hits_sensitivity <- microbe_reports_bgfilter %>%
+  filter(
+    category %in% c("bacteria", "fungi"),
+    sample_name %in% samples_hflu_only$sanitized_name,
+    grepl("haemophilus influenzae", name, ignore.case=TRUE)
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(bacterial_rpm=sum(nt_rpm, na.rm=TRUE), .groups="drop")
+
+message("11.4a sensitivity - n H. influenzae-only samples: ", nrow(bacterial_hflu_hits_sensitivity))
+
+neut_score_hflu_sensitivity <- build_neut_score(bacterial_hflu_hits_sensitivity)
+cor_hflu_sensitivity <- compute_cor2(neut_score_hflu_sensitivity, score_col="Neut_score")
+
+interaction_p_hflu_sensitivity <- summary(
+  lm(Neut_score ~ log10(bacterial_rpm + 1) * as.character(modality), data=neut_score_hflu_sensitivity)
+)$coefficients["log10(bacterial_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"]
+
+make_neut_plot(
+  score_df=neut_score_hflu_sensitivity,
+  cor_df=cor_hflu_sensitivity,
+  interaction_p=interaction_p_hflu_sensitivity,
+  n_cases=nrow(bacterial_hflu_hits_sensitivity),
+  x_label=expression(log[10]~"H. influenzae RPM (+1)"),
+  title="H. influenzae load versus neutrophil degranulation (sensitivity)",
+  filename="Hflu_vs_NeutDegran_mNGS_sensitivity.pdf"
+)
+
+
+
+
+
+
+# 11.4b. Moraxella catarrhalis specific
+
+
+bacterial_moraxella_hits <- microbe_reports_bgfilter %>%
+  filter(
+    category %in% c("bacteria", "fungi"),
+    sample_name %in% samples_with_moraxella$sanitized_name,
+    grepl("moraxella catarrhalis", name, ignore.case=TRUE)
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(bacterial_rpm=sum(nt_rpm, na.rm=TRUE), .groups="drop")
+
+message("11.4b - n Moraxella samples: ", nrow(bacterial_moraxella_hits))
+
+neut_score_moraxella <- build_neut_score(bacterial_moraxella_hits)
+cor_moraxella <- compute_cor2(neut_score_moraxella, score_col="Neut_score")
+
+interaction_p_moraxella <- summary(
+  lm(Neut_score ~ log10(bacterial_rpm + 1) * as.character(modality), data=neut_score_moraxella)
+)$coefficients["log10(bacterial_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"]
+
+make_neut_plot(
+  score_df=neut_score_moraxella,
+  cor_df=cor_moraxella,
+  interaction_p=interaction_p_moraxella,
+  n_cases=nrow(bacterial_moraxella_hits),
+  x_label=expression(log[10]~"Moraxella RPM (+1)"),
+  title="Moraxella load versus neutrophil degranulation",
+  filename="Moraxella_vs_NeutDegran_mNGS.pdf"
+)
+
+
+# Sensitivity: exclude cases with both H. influenzae and Moraxella
+
+
+samples_moraxella_only <- samples_with_moraxella %>%
+  filter(!sanitized_name %in% samples_with_hflu$sanitized_name)
+
+bacterial_moraxella_hits_sensitivity <- microbe_reports_bgfilter %>%
+  filter(
+    category %in% c("bacteria", "fungi"),
+    sample_name %in% samples_moraxella_only$sanitized_name,
+    grepl("moraxella catarrhalis", name, ignore.case=TRUE)
+  ) %>%
+  group_by(sample_name) %>%
+  summarize(bacterial_rpm=sum(nt_rpm, na.rm=TRUE), .groups="drop")
+
+message("11.4b sensitivity - n Moraxella-only samples: ", nrow(bacterial_moraxella_hits_sensitivity))
+
+neut_score_moraxella_sensitivity <- build_neut_score(bacterial_moraxella_hits_sensitivity)
+cor_moraxella_sensitivity <- compute_cor2(neut_score_moraxella_sensitivity, score_col="Neut_score")
+
+interaction_p_moraxella_sensitivity <- summary(
+  lm(Neut_score ~ log10(bacterial_rpm + 1) * as.character(modality), data=neut_score_moraxella_sensitivity)
+)$coefficients["log10(bacterial_rpm + 1):as.character(modality)RNA", "Pr(>|t|)"]
+
+make_neut_plot(
+  score_df=neut_score_moraxella_sensitivity,
+  cor_df=cor_moraxella_sensitivity,
+  interaction_p=interaction_p_moraxella_sensitivity,
+  n_cases=nrow(bacterial_moraxella_hits_sensitivity),
+  x_label=expression(log[10]~"Moraxella RPM (+1)"),
+  title="Moraxella load versus neutrophil degranulation (sensitivity)",
+  filename="Moraxella_vs_NeutDegran_mNGS_sensitivity.pdf"
+)
 
 
 

@@ -1,106 +1,106 @@
 "sample_name","LRTI_adjudication","pred"
-"P14","No Evidence",0.0187
-"P52","Definite",0.9287
-"P57","Definite",0.9998
-"P65","Definite",0.3183
-"P76","No Evidence",0.6592
-"P79","Definite",0.9999
+"P14","No Evidence",0.0244
+"P52","Definite",0.8366
+"P57","Definite",0.9982
+"P65","Definite",0.3563
+"P76","No Evidence",0.2856
+"P79","Definite",1
 "P81","Definite",1
-"P85","No Evidence",0.809
-"P92","No Evidence",0.0433
-"P116","No Evidence",0.6957
-"P121","Definite",0.9993
+"P85","No Evidence",0.6545
+"P92","No Evidence",0.0285
+"P116","No Evidence",0.6321
+"P121","Definite",0.9889
 "P129","Definite",1
-"P130","Definite",0.9912
-"P139","Definite",0.991
-"P156","Definite",0.9848
-"P157","Definite",0.9992
+"P130","Definite",0.9978
+"P139","Definite",0.9747
+"P156","Definite",0.9737
+"P157","Definite",0.9906
 "P206","Definite",1
-"P208","No Evidence",0.4784
+"P208","No Evidence",0.4593
 "P210","Definite",1
-"P237","No Evidence",0.2309
-"P241","Definite",0.1366
+"P237","No Evidence",0.124
+"P241","Definite",0.2634
 "P249","Definite",1
-"P22","Definite",0.8667
-"P34","No Evidence",0.2003
-"P55","Definite",0.8681
-"P75","No Evidence",0.9992
-"P80","Definite",0.2911
-"P84","No Evidence",0.4182
-"P86","Definite",0.9884
+"P22","Definite",0.9958
+"P34","No Evidence",0.4746
+"P55","Definite",0.9846
+"P75","No Evidence",1
+"P80","Definite",0.5533
+"P84","No Evidence",0.6178
+"P86","Definite",0.9855
 "P106","Definite",1
-"P125","No Evidence",0.2841
-"P135","Definite",0.3269
-"P137","Definite",1
-"P172","No Evidence",0.1749
-"P185","Definite",0.2707
-"P195","Definite",0.4249
-"P202","No Evidence",0.1509
-"P209","Definite",0.9897
-"P225","Definite",0.8478
-"P240","Definite",0.878
-"P243","No Evidence",0.1522
-"P252","Definite",0.8244
+"P125","No Evidence",0.3075
+"P135","Definite",0.3405
+"P137","Definite",0.9999
+"P172","No Evidence",0.1427
+"P185","Definite",0.2057
+"P195","Definite",0.5789
+"P202","No Evidence",0.1283
+"P209","Definite",0.9824
+"P225","Definite",0.9485
+"P240","Definite",0.8646
+"P243","No Evidence",0.1406
+"P252","Definite",0.7493
 "P253","Definite",1
-"P260","Definite",0.9999
-"P11","Definite",0.8887
-"P25","No Evidence",0.0293
+"P260","Definite",1
+"P11","Definite",0.9574
+"P25","No Evidence",0.0114
 "P64","Definite",1
 "P71","Definite",1
 "P78","Definite",1
-"P88","No Evidence",0.5097
+"P88","No Evidence",0.5954
 "P91","Definite",1
-"P97","Definite",0.9999
-"P103","Definite",0.7997
-"P115","Definite",0.9993
-"P122","No Evidence",0.0459
-"P140","Definite",0.9729
-"P148","Definite",0.9276
-"P173","No Evidence",0.0898
-"P177","No Evidence",0.5787
-"P182","No Evidence",0.075
-"P218","Definite",0.7587
-"P220","Definite",0.9935
-"P223","Definite",0.9548
-"P226","No Evidence",0.1687
-"P227","Definite",0.9854
-"P5","Definite",0.9072
-"P6","Definite",0.0514
-"P8","Definite",0.9962
-"P19","No Evidence",0.1497
+"P97","Definite",1
+"P103","Definite",0.789
+"P115","Definite",0.9997
+"P122","No Evidence",0.0951
+"P140","Definite",0.9994
+"P148","Definite",0.7242
+"P173","No Evidence",0.1129
+"P177","No Evidence",0.3544
+"P182","No Evidence",0.0886
+"P218","Definite",0.8921
+"P220","Definite",0.9282
+"P223","Definite",0.9577
+"P226","No Evidence",0.0458
+"P227","Definite",0.9674
+"P5","Definite",0.7818
+"P6","Definite",0.0307
+"P8","Definite",0.9896
+"P19","No Evidence",0.1538
 "P47","Definite",1
 "P48","Definite",0.9999
-"P53","Definite",0.9871
+"P53","Definite",0.9999
 "P77","Definite",1
 "P93","Definite",1
-"P100","Definite",0.8118
-"P104","No Evidence",0.0413
-"P108","No Evidence",0.9202
-"P117","Definite",0.8102
-"P124","Definite",0.6409
-"P152","No Evidence",0.1368
-"P158","Definite",0.9998
-"P166","No Evidence",0.8944
-"P196","No Evidence",0.191
-"P216","Definite",0.9887
-"P244","Definite",0.9068
-"P2","Definite",0.3978
-"P16","Definite",0.7127
-"P17","Definite",0.9837
-"P27","No Evidence",0.5582
+"P100","Definite",0.8128
+"P104","No Evidence",0.0929
+"P108","No Evidence",0.8504
+"P117","Definite",0.8534
+"P124","Definite",0.6679
+"P152","No Evidence",0.371
+"P158","Definite",0.9999
+"P166","No Evidence",0.934
+"P196","No Evidence",0.2231
+"P216","Definite",0.9655
+"P244","Definite",0.9074
+"P2","Definite",0.3522
+"P16","Definite",0.7237
+"P17","Definite",1
+"P27","No Evidence",0.5116
 "P41","Definite",1
-"P42","No Evidence",0.4715
-"P43","No Evidence",0.3119
-"P45","Definite",0.9372
-"P54","Definite",0.9934
-"P69","Definite",0.9131
-"P87","Definite",0.9616
-"P132","Definite",0.9741
+"P42","No Evidence",0.4177
+"P43","No Evidence",0.2102
+"P45","Definite",0.6821
+"P54","Definite",0.9838
+"P69","Definite",0.8018
+"P87","Definite",0.9726
+"P132","Definite",0.9764
 "P136","Definite",1
-"P141","No Evidence",0.1432
-"P171","No Evidence",0.1287
-"P189","Definite",0.0208
-"P214","Definite",0.7502
-"P222","No Evidence",0.4553
-"P231","Definite",0.9849
-"P259","Definite",0.0919
+"P141","No Evidence",0.274
+"P171","No Evidence",0.1836
+"P189","Definite",0.0185
+"P214","Definite",0.8197
+"P222","No Evidence",0.711
+"P231","Definite",1
+"P259","Definite",0.1067

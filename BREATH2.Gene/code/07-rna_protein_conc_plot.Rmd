@@ -21,7 +21,7 @@ library(openxlsx)
 # 7.1. Import data
 
 
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
 
 rna_res <- read.csv(
   file.path(
@@ -33,7 +33,7 @@ rna_res <- read.csv(
 
 prot_res <- read.csv(
   file.path(
-    "C:/Users/User/Documents/UCSF/BREATH2.Prot/results",
+    "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results",
     "DA_results_proteomics.csv"
   ),
   stringsAsFactors = F
@@ -255,16 +255,21 @@ concordance_plot <- ggplot(
       "Protein only"
     )
   ) +
+  
+  scale_y_continuous(
+    limits = c(-5, 5), 
+    labels = function(x) sprintf("%.1f", x)
+  ) +
 
   theme_classic(
-    base_size = 12,
+    base_size = 16,
     base_family = "Arial"
   ) +
 
   labs(
     x = expression("Transcriptome log"[2] * " fold change"),
     y = expression("Proteome log"[2] * " fold change"),
-    title = "RNA–Protein concordance of LRTI-associated features",
+    title = "Concordance of LRTI-associated features",
     color = NULL
   ) +
 
@@ -276,13 +281,13 @@ concordance_plot <- ggplot(
     ),
     axis.title = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       colour = "black",
       face = "plain"
     ),
     axis.text = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       colour = "black",
       face = "plain"
     ),
@@ -292,23 +297,23 @@ concordance_plot <- ggplot(
     ),
     plot.title = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       face = "plain",
       colour = "black",
       hjust = 0.5
     ),
-    plot.margin = margin(
+    plot.margin = ggplot2::margin(
       10,
       15,
       10,
-      10
+      10,
     ),
-    legend.position = "bottom",
+    legend.position = c(0.5, 0.08),
     legend.direction = "horizontal",
     legend.title = element_blank(),
     legend.text = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       face = "plain"
     ),
     legend.key.size = unit(
@@ -331,6 +336,15 @@ ggsave(
   height = 6.5,
   device = cairo_pdf,
   bg = "white"
+)
+
+# Save Figure 3B plot object for patchwork
+saveRDS(
+  concordance_plot,
+  file.path(
+    results_dir,
+    "figure3B_RNA_protein_concordance.rds"
+  )
 )
 
 

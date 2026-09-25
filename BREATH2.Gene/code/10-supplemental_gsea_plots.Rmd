@@ -24,7 +24,7 @@ library(enrichplot)
 # 10.1. Import data
 
 
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Gene/results"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Gene/results"
 
 rna_res <- read.csv(
   file.path(results_dir, "DE_limma_results_transcriptome.csv"),

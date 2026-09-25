@@ -21,8 +21,8 @@ library(ggplot2)
 # 7.1. Import metadata & predictions
 
 
-data_dir    <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/data"
-results_dir <- "C:/Users/User/Documents/UCSF/BREATH2.Prot/results"
+data_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/data"
+results_dir <- "C:/Users/peter/OneDrive/Documents/UCSF/BREATH2.Prot/results"
 
 patient_info_with_folds <- read.csv(
   file.path(data_dir, "patient_info_with_folds.csv"),
@@ -53,7 +53,7 @@ pred_list <- classifier_files %>%
           )
         ) %>%
         inner_join(
-          patient_info_with_folds %>% select(patient_id, fold),
+          patient_info_with_folds %>% dplyr::select(patient_id, fold),
           by = "patient_id"
         )
     })
@@ -475,12 +475,12 @@ roc_plot_gg_prot <- ggplot() +
     ),
     axis.title = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       face = "plain"
     ),
     plot.title = element_text(
       family = "Arial",
-      size = 12,
+      size = 16,
       face = "plain",
       hjust = 0.5
     ),
@@ -509,6 +509,15 @@ ggsave(
   height = 6.5,
   device = cairo_pdf,
   bg = "white"
+)
+
+# Save Figure 4C plot object for patchwork
+saveRDS(
+  roc_plot_gg_prot,
+  file.path(
+    results_dir,
+    "figure4C_protein.rds"
+  )
 )
 
 
